@@ -539,7 +539,8 @@ function vOverview(d0){
       <div style="border-top:1px solid var(--line)">${miniStand(d,5)}</div>
       <div class="pad row"><button class="btn sm" data-act="series-view" data-v="${k}" data-w="standings">Standings</button><button class="btn sm" data-act="series-view" data-v="${k}" data-w="schedule">Schedule</button></div></section>`;
   }).join("");
-  return `<div class="row"><h2>${ui.year} season</h2></div>${emptyHint(d0)}<div class="grid3">${cards}</div>`;
+  const lb=lastBackup(),old=!lb||Date.now()-lb>7*864e5,has=Object.values(docs).some(x=>x.drivers.length||x.races.length);
+  return `<div class="row"><h2>${ui.year} Season</h2><span class="sp"></span><button class="btn" data-act="help">Help</button></div>${has&&old?`<div class="help">You haven't backed up your saves ${lb?"in a while (last: "+agoText(lb)+")":"yet"}. <button class="btn sm" data-act="backupAll">Download a backup</button></div>`:""}${emptyHint(d0)}<div class="grid3">${cards}</div>`;
 }
 
 const trackCell=(nm)=>{const k=normTrack(nm)||String(nm||"").trim().toLowerCase();
@@ -567,7 +568,7 @@ function vSchedule(d){
       <td><button class="btn sm ${r.done?"":"pri"}" data-act="race" data-id="${r.id}">${r.done?"Results":"Enter results"}</button></td></tr>`;
   }).join("");
   const hd=ed?"<th></th><th>#</th><th>Date</th><th>Race</th><th>Track</th><th>Type</th><th>Miles</th><th>Laps</th><th colspan=2></th>":"<th></th><th class=n>#</th><th>Date</th><th>Race</th><th>Track</th><th>Type</th><th class=n>Laps</th><th>Winner</th><th>Pole</th><th></th>";
-  return `<div class="row"><h2>${esc(d.name)} schedule</h2><span class="sp"></span>
+  return `<div class="row"><h2>${esc(d.name)} Schedule</h2><span class="sp"></span>
     <button class="btn pri" data-act="nrPick">Import NR2003 results</button><input type="file" id="nrFile" accept=".html,.htm,text/html" multiple hidden>
     <button class="btn" data-act="iniPick" title="Import a season schedule from an NR2003 .ini file">Import schedule (.ini)</button><input type="file" id="iniFile" accept=".ini,.txt" hidden>
     ${d.races.length?'<button class="btn danger" data-act="clearSched" data-confirm="1" title="Removes every race and its results. Drivers stay.">Clear schedule</button>':""}<button class="btn ${ed?"pri":""}" data-act="schedEdit">${ed?"Done editing":"Edit schedule"}</button>${ed?'<button class="btn" data-act="addrace">+ Add race</button>':""}</div>
@@ -624,10 +625,10 @@ function vStandings(d){
       <td class="n"><b>${s.show}</b></td><td class="n">${i?(sameGroup?"-"+(lead-s.show):"–"):"–"}</td><td class="n">${i&&sameGroup?(nxt?"-"+nxt:"0"):"–"}</td>
       <td class="n">${s.starts}</td><td class="n">${s.wins}</td><td class="n">${s.t5}</td><td class="n">${s.t10}</td><td class="n">${s.poles}</td><td class="n">${s.led}</td><td class="n">${s.dnf}</td>${stg(d).on?`<td class="n">${s.stw}</td><td class="n">${s.stp}</td><td class="n">${s.pp}</td>`:""}<td class="n">${s.avgF!=null?fmt(s.avgF):"–"}</td></tr>`;
   });
-  return `<div class="row"><h2>${esc(d.settings.playoff&&d.settings.playoff.on?d.name+" standings":d.name+" driver standings")}</h2>${chase?'<span class="pill ok">Chase in progress</span>':""}<span class="sp"></span>
+  return `<div class="row"><h2>${esc(d.settings.playoff&&d.settings.playoff.on?d.name+" Standings":d.name+" Driver Standings")}</h2>${chase?'<span class="pill ok">Chase in progress</span>':""}<span class="sp"></span>
     <div class="seg">${[["full","Full season"],["reg","Regular season"],["post",(PO(d).on?"Playoffs":d.settings.chase.on?"Chase":"Playoffs / Chase")]].map(([v,n])=>`<button data-act="stFilter" data-v="${v}" class="${mode===v?"on":""}">${n}</button>`).join("")}</div>
     <label class="row small"><input type="checkbox" class="chk" id="showAll" ${ui.showAll?"checked":""}> Include drivers not running for points</label>
-    ${dl&&rows.length?'<button class="btn sm" data-act="csv">Export CSV</button>':""}</div>${emptyHint(d)}
+    ${rows.length?'<button class="btn sm" data-act="csv">Export CSV</button>':""}</div>${emptyHint(d)}
     ${qs?`<div class="small muted">${qs.R===0?"Regular season complete.":`<b>${qs.R}</b> regular season race${qs.R===1?"":"s"} left.`} <b>In</b> is inside the top ${qs.n} now. <b>Locked in</b> means no results in the remaining races can knock the driver out, even if they score nothing and everyone else scores the most possible (${qs.maxRace} per race).${!qs.isCh&&PO(d).winAdv?" Race winners get in first.":""} <b>Eliminated</b> means the driver can no longer get in.</div>`:""}
     ${mode==="post"?playoffPanel(d):`<div class="small muted">${mode==="reg"?"Regular season points only"+(postStart(d)!=null?" (first "+postStart(d)+" races)":""):"Total points over every race, with no postseason reset"}.</div>`}
     <div class="card tw">${rows.length?`<table><thead><tr><th class=n>Pos</th><th>#</th><th>Driver</th>${qs?`<th>${qs.isCh?"Chase":"Playoffs"}</th>`:""}<th class=n>Pts</th><th class=n>Lead</th><th class=n>Next</th><th class=n>Starts</th><th class=n>Wins</th><th class=n>T5</th><th class=n>T10</th><th class=n>Poles</th><th class=n>Led</th><th class=n>DNF</th>${stg(d).on?"<th class=n title=\"Stage wins\">Stg W</th><th class=n title=\"Stage points\">Stg Pts</th><th class=n title=\"Playoff points\">PO Pts</th>":""}<th class=n>Avg fin</th></tr></thead><tbody>${html}</tbody></table>`:'<div class="empty">Add drivers marked “runs for points” on the Roster tab.</div>'}</div>
@@ -647,7 +648,7 @@ function group(list,field){
   return [...g.values()];
 }
 function statHead(d){
-  return `<div class="row"><h2>${esc(d.name)} stats</h2><span class="sp"></span>
+  return `<div class="row"><h2>${esc(d.name)} Stats</h2><span class="sp"></span>
     <div class="seg">${[["drivers","Drivers"],["teams","Teams"],["makes","Makes"],["compare","Compare"]].map(([v,n])=>`<button data-act="statMode" data-v="${v}" class="${ui.statMode===v?"on":""}">${n}</button>`).join("")}</div>
     <div class="seg">${[["season",ui.year+" season"],["career","Career"]].map(([v,n])=>`<button data-act="statScope" data-v="${v}" class="${ui.statScope===v?"on":""}">${n}</button>`).join("")}</div></div>`;
 }
@@ -728,7 +729,7 @@ function vTeams(d){
       ${top&&top.s.starts?`<div class="small"><span class="muted">Best driver</span> <b>${esc(top.dr.name)}</b> <span class="muted">· P${top.rank||"–"} · ${top.s.pts} pts</span></div>`:""}
       <div class="row"><span class="chip" style="background:${heat(rd)}">Driver ${rd==null?"–":f1(rd)}</span><span class="chip" style="background:${heat(rp)}">Pit ${rp==null?"–":f1(rp)}</span><span class="chip" style="background:${heat(rv)}">Vehicle ${rv==null?"–":f1(rv)}</span></div></button>`;
   }).join("");
-  return `<div class="row"><h2>${esc(d.name)} teams · ${teams.length}</h2></div>${emptyHint(d)}
+  return `<div class="row"><h2>${esc(d.name)} Teams · ${teams.length}</h2></div>${emptyHint(d)}
     ${teams.length?`<div class="grid3">${cards}</div>`:'<div class="card empty">Teams come from the Team column on your roster. Add drivers (or import .car files) and each team gets a card.</div>'}
     <p class="small muted">Open a team to see its cars, wins, history and average ratings, and to add the owner, base and notes.</p>`;
 }
@@ -810,11 +811,11 @@ function vHistory(d){
   const tbl=(rows)=>rows.trim()?`<div class="card tw"><table><thead><tr><th>Record</th><th class="n">Value</th><th>Holder</th><th>When</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="card empty">Records appear after you enter results.</div>';
   return `<div class="row"><h2>History</h2></div>
     <section class="sect"><h3>Champions</h3><div class="card tw">${ys.length&&champRows.trim()?`<table><thead><tr><th>Year</th>${SERIES.map(([k,n])=>`<th>${esc((docsFor(k).slice(-1)[0]||{}).name||n)}</th>`).join("")}</tr></thead><tbody>${champRows}</tbody></table>`:'<div class="empty">Champions appear after results are entered.</div>'}</div></section>
-    <section class="sect"><div class="row"><h3>${esc(d.name)} awards · ${d.year}</h3></div>
+    <section class="sect"><div class="row"><h3>${esc(d.name)} Awards · ${d.year}</h3></div>
       <div class="card tw">${aw.length?`<table><thead><tr><th>Award</th><th>Winner</th><th>Value</th></tr></thead><tbody>${aw.map(a=>`<tr><td><b>${a[0]}</b></td><td>${a[1]}</td><td>${a[2]}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Awards are worked out from this season\'s results.</div>'}</div>
       <div class="row"><h3 style="font-size:17px">Your own awards</h3><span class="sp"></span><button class="btn" data-act="awadd">+ Add award for ${d.year}</button></div>
       ${crow?`<div class="card tw"><table><thead><tr><th>Year</th><th>Award</th><th>Winner</th><th></th></tr></thead><tbody>${crow}</tbody></table></div>`:'<div class="small muted">Add awards the game does not track, like a most popular driver or crew chief of the year. Past years stay listed here.</div>'}</section>
-    <section class="sect"><h3>${esc(d.name)} records</h3><div class="grid2"><div class="sect"><h3 style="font-size:17px">Single season</h3>${tbl(sr+srAvg)}</div><div class="sect"><h3 style="font-size:17px">Career</h3>${tbl(cr+crW)}</div></div>
+    <section class="sect"><h3>${esc(d.name)} Records</h3><div class="grid2"><div class="sect"><h3 style="font-size:17px">Single season</h3>${tbl(sr+srAvg)}</div><div class="sect"><h3 style="font-size:17px">Career</h3>${tbl(cr+crW)}</div></div>
       <div class="sect"><h3 style="font-size:17px">Single race and streaks</h3>${tbl(raceRec+streakRow)}</div></section>`;
 }
 
@@ -887,7 +888,7 @@ function vExhib(d){
   const kc=kf!=="all"?[]:KINDS.filter(k=>k!=="Other"||st.some(s=>s.k.Other));
   const cnt=k=>ev0.filter(r=>k==="all"||r.kind===k).length;
   const kseg=`<div class="seg" role="group" aria-label="Filter by event type">${["all",...KINDS].map(k=>`<button data-act="exKind" data-v="${k}" class="${kf===k?"on":""}">${k==="all"?"All":k}${cnt(k)?` ${cnt(k)}`:""}</button>`).join("")}</div>`;
-  return `<div class="row"><h2>${esc(d.name)} exhibitions</h2><span class="sp"></span>
+  return `<div class="row"><h2>${esc(d.name)} Exhibitions</h2><span class="sp"></span>
     <select id="exKind" aria-label="Event type">${KINDS.map(k=>`<option>${k}</option>`).join("")}</select><button class="btn" data-act="exadd">+ Add event</button>
     <button class="btn pri" data-act="exPick">Import NR2003 results</button><input type="file" id="exFile" accept=".html,.htm,text/html" multiple hidden>
     ${ev.length?'<button class="btn danger" data-act="exclear" data-confirm="1">Clear exhibitions</button>':""}</div>
@@ -910,7 +911,7 @@ function vRoster(d){
     <td><input type="checkbox" class="chk" data-ed="drv" data-id="${x.id}" data-k="pf" ${x.pf?"checked":""} aria-label="Runs for points"></td>
     <td><input type="checkbox" class="chk" data-ed="drv" data-id="${x.id}" data-k="rookie" ${x.rookie?"checked":""} aria-label="Rookie"></td>
     <td><button class="btn sm" data-act="drv" data-id="${x.id}">Card</button> <button class="btn sm" data-act="mergeOpen" data-id="${x.id}" title="Merge into another driver, for example to fix a misspelled name">Merge</button> <button class="btn sm danger" data-act="deldrv" data-id="${x.id}" data-confirm="1">✕</button></td></tr>`).join("");
-  return `<div class="row"><h2>${esc(d.name)} roster · ${d.drivers.length}</h2><span class="sp"></span>
+  return `<div class="row"><h2>${esc(d.name)} Roster · ${d.drivers.length}</h2><span class="sp"></span>
     <input type="text" id="filter" placeholder="Filter by name, team, #" value="${esc(ui.filter)}" style="width:210px">
     ${d.drivers.length?`<button class="btn danger" data-act="clearRoster" data-confirm="1" title="Removes every driver. Race results are removed too, since they belong to those drivers.">${d.races.some(r=>r.done)?"Clear roster and results":"Clear roster"}</button>`:""}<button class="btn" data-act="adddrv">+ Add driver</button><button class="btn pri" data-act="carPick">Import .car files</button><input type="file" id="carFile" accept=".car" multiple hidden></div>
     ${emptyHint(d)}<datalist id="makes">${MAKES.map(m=>`<option>${m}</option>`).join("")}</datalist>
@@ -932,7 +933,7 @@ function vRatings(d){
     ${AV.map(([a])=>{const v=avgRate(x,a);return `<td class="n av" style="background:${heat(v)}"><b>${v==null?"–":f1(v)}</b></td>`}).join("")}
     ${cols.map(([c])=>{const v=rg(x,c);return `<td class="rg-c" style="background:${heat(v?(v.a+v.b)/2:null)}"><input type="number" step="1" min="0" max="100" data-ed="rate" data-e="a" data-id="${x.id}" data-k="${c}" value="${v?v.a:""}" aria-label="${c} min"><span>–</span><input type="number" step="1" min="0" max="100" data-ed="rate" data-e="b" data-id="${x.id}" data-k="${c}" value="${v?v.b:""}" aria-label="${c} max"></td>`}).join("")}</tr>`).join("");
   const foot=all.length?`<tfoot><tr class="foot"><td></td><td>Roster average</td>${AV.map(([a])=>{const v=meanOf(all.map(x=>avgRate(x,a)));return `<td class="n" style="background:${heat(v)}">${v==null?"–":f1(v)}</td>`}).join("")}${cols.map(([c])=>{const v=meanOf(all.map(x=>rmean(x,c)));return `<td class="n" style="background:${heat(v)}">${v==null?"–":f1(v)}</td>`}).join("")}</tr></tfoot>`:"";
-  return `<div class="row"><h2>${esc(d.name)} ratings</h2><span class="sp"></span><button class="btn" data-act="exportCars" data-confirm="1" title="Write your ratings into your .car files">Export to .car</button><button class="btn" data-act="bulk" title="Change many ratings at once">Bulk edit</button><button class="btn" data-act="tmr" title="Set pit crew and vehicle ratings for whole teams">Team ratings</button><button class="btn" data-act="bld" title="Work out ratings from results, even for drivers with none">Ratings from results</button><button class="btn" data-act="sugg">Suggest changes</button>
+  return `<div class="row"><h2>${esc(d.name)} Ratings</h2><span class="sp"></span><button class="btn" data-act="exportCars" data-confirm="1" title="Write your ratings into your .car files">Export to .car</button><button class="btn" data-act="bulk" title="Change many ratings at once">Bulk edit</button><button class="btn" data-act="tmr" title="Set pit crew and vehicle ratings for whole teams">Team ratings</button><button class="btn" data-act="bld" title="Work out ratings from results, even for drivers with none">Ratings from results</button><button class="btn" data-act="sugg">Suggest changes</button>
     <div class="seg">${[["d","Driver"],["p","Pit crew"],["v","Vehicle"],["all","All"]].map(([v,n])=>`<button data-act="rateGroup" data-v="${v}" class="${g===v?"on":""}">${n}</button>`).join("")}</div>
     <input type="text" id="filter" placeholder="Filter drivers" value="${esc(ui.filter)}" style="width:170px"></div>
     ${emptyHint(d)}
@@ -964,6 +965,55 @@ function suggestions(d,scale,minS){
 }
 const sgVal=(r,k,mo)=>{const v=mo.adj&&mo.adj[r.id+":"+k];return v!=null?v:r[k]};
 const sgSign=v=>v>0?"+"+v:String(v);
+const lastBackup=()=>{try{return +localStorage.getItem("nr_lastbackup")||0}catch(e){return 0}};
+const agoText=t=>{if(!t)return "never";const days=Math.floor((Date.now()-t)/864e5);return days<1?"today":days===1?"yesterday":days+" days ago"};
+function backupAll(){
+  whenSaved(async()=>{
+    const out={format:"nr2003-tracker-backup",version:2,made:new Date().toISOString(),saves:[]};
+    saves.forEach(sv=>{const dcs={};raw.forEach((data,sid)=>{const [sl,id]=parseSid(sid);if(sl===sv.id)dcs[id]=data});if(sv.id===slot)Object.keys(docs).forEach(k=>{dcs[k]=docs[k]});out.saves.push({id:sv.id,name:sv.name,docs:dcs})});
+    const n=out.saves.reduce((a,x)=>a+Object.keys(x.docs).length,0);
+    if(!n){toast("Nothing to back up yet");return}
+    const ok=await saveFile("nr2003-tracker-backup-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify(out));
+    if(ok){try{localStorage.setItem("nr_lastbackup",String(Date.now()))}catch(e){}toast("Backup of "+out.saves.length+" save"+(out.saves.length===1?"":"s")+" downloaded");if(ui.modal&&ui.modal.type==="saves")renderModal();render()}
+  });
+}
+function restoreBackup(){
+  const inp=document.createElement("input");inp.type="file";inp.accept=".json,application/json";
+  inp.onchange=async()=>{
+    const f=inp.files[0];if(!f)return;
+    try{
+      const o=JSON.parse(await f.text());let list=[];
+      if(o.format==="nr2003-tracker-backup"&&Array.isArray(o.saves))list=o.saves.map(x=>({name:x.name,docs:x.docs}));
+      else if(o.format==="nr2003-tracker"&&o.docs)list=[{name:"Restored backup",docs:o.docs}];
+      else throw 0;
+      let n=0;
+      for(const sv of list){
+        if(!sv.docs||!Object.keys(sv.docs).length)continue;
+        const id="s"+uid(),taken=saves.some(x=>x.name===sv.name);
+        for(const k of Object.keys(sv.docs))await putStored(sidOf(id,k),sv.docs[k]);
+        saves.push({id,name:taken?(sv.name||"Save")+" (restored)":(sv.name||"Restored save")});n++;
+      }
+      if(!n)throw 0;
+      await writeSaves();renderModal();render();toast(n+" save"+(n===1?"":"s")+" restored. Open "+(n===1?"it":"them")+" from the list.");
+    }catch(e){toast("That doesn't look like a backup from this tracker")}
+  };
+  inp.click();
+}
+function modalHelp(){
+  const st=(n,t,x)=>`<li style="margin:0 0 12px"><b>${t}</b><div class="small muted" style="margin-top:2px">${x}</div></li>`;
+  return `<div class="dlg" role="dialog" aria-label="Help" style="max-width:680px"><header><h3>How to get started</h3><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body"><p class="muted" style="margin-top:0">This tracker keeps your NR2003 league: schedule, results, standings, stats, rosters and ratings for as many series as you like. Pick a series at the top, then work through the tabs.</p>
+  <ol style="padding-left:20px;margin:0">
+  ${st(1,"Set your rules (Setup tab)","Choose the season year, the points for each finish, stage points, and the Chase or playoff format. The defaults follow the 2026 NASCAR rules. Add more series with the + at the top.")}
+  ${st(2,"Add your drivers (Roster tab)","Type them in, paste a list, or import your NR2003 .car files, which bring in names, numbers, teams and ratings all at once.")}
+  ${st(3,"Build the schedule (Schedule tab)","Import your NR2003 season .ini file, paste a list, or add races by hand with Edit schedule. Drag races to reorder them.")}
+  ${st(4,"Enter results","Click Enter results on a race, or use Import NR2003 results to load the results .html file the game saves. Every race result window has tabs for Results, Qualifying and Stages. Drag drivers to reorder them.")}
+  ${st(5,"Watch it update","Standings, Stats, Teams, Tracks and History fill in on their own. Click a driver, team or track name anywhere to see their full profile.")}
+  ${st(6,"Tune the ratings (Ratings tab)","Edit ratings by hand, bulk edit them, set pit crew and vehicle ratings by team, build ratings from results, or get suggested changes for next season. Export them back into your .car files when you're done.")}
+  ${st(7,"Start next season","On the Setup tab, use Start new season to carry your roster and schedule forward.")}
+  ${st(8,"Keep your data safe","Click your save's name at the top to switch between saves, like a 2000 sim and a 2026 sim. Use Download backup of all saves often and keep the file somewhere safe.")}
+  </ol></div></div>`;
+}
 function modalSaves(){
   const rows=saves.map(x=>`<tr class="${x.id===slot?"cur":""}"><td><input type="text" data-svname="${x.id}" value="${esc(x.name)}" style="min-width:160px" aria-label="Save name"></td>
     <td>${x.id===slot?'<span class="pill ok">Open now</span>':`<button class="btn sm" data-act="saveSwitch" data-id="${x.id}">Open</button>`}</td>
@@ -976,6 +1026,10 @@ function modalSaves(){
       <label class="fld">Starting year<input type="number" id="svYear" value="2026" style="width:100px"></label>
       <button class="btn pri" data-act="saveNew">New blank save</button><button class="btn" data-act="saveDup">Copy "${esc(slotName())}"</button></div>
       <div class="small muted">A new save opens right away with the three default series. Your other saves stay as they are, and every change is stored in the save you have open.</div></div>
+    <div class="sect"><h3 style="font-size:17px">Back up your saves</h3>
+      <div class="small muted">A backup is a file with every save in it. Keep it somewhere safe, like cloud storage. Last backup: <b>${agoText(lastBackup())}</b>.</div>
+      <div class="row"><button class="btn pri" data-act="backupAll">Download backup of all saves</button><button class="btn" data-act="restoreBackup">Restore from a backup file</button></div>
+      <div class="small muted">Restoring adds the saves in the file as new saves. It never overwrites what you have.</div></div>
     <div class="sect"><h3 style="font-size:17px">Clear all changes</h3>
       <div class="small muted">Erases everything in "${esc(slotName())}" (drivers, schedules, results and ratings) and restores the defaults for the starting year above. Other saves are not touched. Download a backup from Setup first if you might want it back.</div>
       <div><button class="btn danger" data-act="clearAll" data-confirm="1">Clear everything in this save</button></div></div>
@@ -1131,7 +1185,7 @@ function vSetup(d){
   <section class="card pad sect"><h3>Season year</h3>
     <div class="row"><label class="fld">Year for all three series<input type="number" id="renYear" value="${d.year}"></label><button class="btn pri" data-act="renameYear">Change year</button></div>
     <div class="small muted">Everything in the ${d.year} season moves to the new year. You can use any year, such as your sim year.</div></section>
-  <section class="card pad sect"><h3>${esc(d.name)} · ${d.year} rules</h3>
+  <section class="card pad sect"><h3>${esc(d.name)} · ${d.year} Rules</h3>
     <div class="fields">
       <label class="fld">Series name<input type="text" data-ed="doc" data-k="name" value="${esc(d.name)}" style="width:180px"></label>
       <label class="fld">Lap led bonus<input type="number" data-ed="set" data-k="led" value="${s.led}"></label>
@@ -1193,12 +1247,7 @@ function vSetup(d){
       <label class="row small"><input type="checkbox" class="chk" id="cpRoster" checked> Carry over rosters and ratings</label>
       <label class="row small"><input type="checkbox" class="chk" id="cpSched" checked> Carry over the schedule (results cleared)</label>
       <button class="btn pri" data-act="newSeason">Start new season</button></div>
-    <div class="row"><span class="small muted">Danger zone:</span><button class="btn danger" data-act="delSeason" data-confirm="1">Delete the ${d.year} season (all three series)</button></div></section>
-  <section class="card pad sect"><h3>Backup</h3>
-    <div class="small muted">Your league saves automatically. A backup file is an extra copy you can keep or move to another page.</div>
-    <div class="row">${dl?'<button class="btn" data-act="exportAll">Download backup</button>':'<button class="btn" data-act="exportAll">Show backup text</button>'}</div>
-    <textarea id="backup" rows="4" placeholder="Paste a backup here to restore it" aria-label="Backup text"></textarea>
-    <div class="row"><button class="btn" data-act="importAll" data-confirm="1">Restore from pasted backup</button><span class="small muted">Replaces everything currently saved.</span></div></section>`;
+    <div class="row"><span class="small muted">Danger zone:</span><button class="btn danger" data-act="delSeason" data-confirm="1">Delete the ${d.year} season (all series)</button></div></section>`;
 }
 
 /* ---------- modals ---------- */
@@ -1252,7 +1301,7 @@ function modalDriver(){
 function renderModal(){
   const el=$("#modal");
   if(!ui.modal){el.innerHTML="";return}
-  el.innerHTML=ui.modal.type==="bulk"?modalBulk():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="track"?modalTrack():modalDriver();
+  el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="track"?modalTrack():modalDriver();
 }
 function openRace(id,exh){
   const d=cur(),r=(exh?(d.exh||[]):d.races).find(x=>x.id===id);if(!r)return;
@@ -1284,8 +1333,9 @@ function parsePaste(d,text){
   return {out,miss};
 }
 function saveFile(name,text){
-  if(dl){dl.save({filename:name,data:text}).catch(e=>{if(e&&e.code!=="declined")toast("Couldn't save the file")})}
-  else toast("Downloads aren't available here");
+  if(dl){return dl.save({filename:name,data:text}).then(()=>true).catch(e=>{if(e&&e.code!=="declined")toast("Couldn't save the file");return false})}
+  try{const type=/\.json$/i.test(name)?"application/json":"text/plain",u=URL.createObjectURL(new Blob([text],{type})),a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(u)},500);return Promise.resolve(true)}
+  catch(e){toast("Downloads aren't available here");return Promise.resolve(false)}
 }
 function exportCSV(d){
   const {rows}=standings(d);
@@ -1682,6 +1732,9 @@ const ACT={
     refreshSeries();ui.series=key;ui.view="overview";toast(name+" added to "+ys.length+" season"+(ys.length===1?"":"s"))},
   delSeries:b=>{const k=b.dataset.k;if(SERIES.length<2){toast("Keep at least one series");return "nr"}
     docsFor(k).forEach(dd=>removeDoc(docId(dd.series,dd.year)));refreshSeries();if(ui.series===k)ui.series=SERIES[0][0];toast("Series deleted")},
+  backupAll:()=>{backupAll();return "nr"},
+  restoreBackup:()=>{restoreBackup();return "nr"},
+  help:()=>{ui.modal={type:"help"};renderModal();return "nr"},
   saves:()=>{ui.modal={type:"saves"};renderModal();return "nr"},
   saveSwitch:b=>{const id=b.dataset.id;whenSaved(()=>doSwitch(id));return "nr"},
   saveNew:()=>{const name=($("#svName").value||"").trim()||"Save "+(saves.length+1),y=Math.round(num($("#svYear").value))||2026,id="s"+uid();
