@@ -571,7 +571,7 @@ function vSchedule(d){
   return `<div class="row"><h2>${esc(d.name)} Schedule</h2><span class="sp"></span>
     <button class="btn pri" data-act="nrPick">Import NR2003 results</button><input type="file" id="nrFile" accept=".html,.htm,text/html" multiple hidden>
     <button class="btn" data-act="iniPick" title="Import a season schedule from an NR2003 .ini file">Import schedule (.ini)</button><input type="file" id="iniFile" accept=".ini,.txt" hidden>
-    ${d.races.length?'<button class="btn danger" data-act="clearSched" data-confirm="1" title="Removes every race and its results. Drivers stay.">Clear schedule</button>':""}<button class="btn ${ed?"pri":""}" data-act="schedEdit">${ed?"Done editing":"Edit schedule"}</button>${ed?'<button class="btn" data-act="addrace">+ Add race</button>':""}</div>
+    ${d.races.length?'<button class="btn danger" data-act="clearSched" data-confirm="1" title="Removes every race and its results. Drivers stay.">Clear schedule</button>':""}${d.races.length?'<button class="btn" data-act="rbulk" title="Change laps or shuffle the order of several races at once">Bulk edit races</button>':""}<button class="btn ${ed?"pri":""}" data-act="schedEdit">${ed?"Done editing":"Edit schedule"}</button>${ed?'<button class="btn" data-act="addrace">+ Add race</button>':""}</div>
     ${emptyHint(d)}
     <div class="card tw">${d.races.length?`<table><thead><tr>${hd}</tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No races yet. Use “Edit schedule” then “Add race”, or paste a schedule on the Setup tab.</div>'}</div>`;
 }
@@ -1159,6 +1159,27 @@ function modalBulk(){
   </div>
   <footer><span class="small muted">${nSel} driver${nSel===1?"":"s"} × ${keys.length} rating${keys.length===1?"":"s"}: ${opDesc}</span><span class="sp"></span><button class="btn pri" data-act="bkApply" data-confirm="1" ${nSel&&keys.length?"":"disabled"}>Apply</button></footer></div>`;
 }
+function rbNew(l,p){return Math.max(1,Math.round(num(l)*(1+p/100)))}
+function rbList(d,m){return d.races.map((r,i)=>`<label class="row" style="gap:8px;padding:3px 0"><input type="checkbox" class="chk" data-rb="${r.id}" ${m.sel[r.id]?"checked":""}> <span class="muted" style="min-width:24px">${i+1}</span> <span>${esc(r.name)||"Unnamed race"}</span> <span class="muted small">${esc(r.track)}</span><span class="sp"></span>${r.laps?(m.sel[r.id]&&m.pct?`<span class="muted">${esc(r.laps)} → <b>${rbNew(r.laps,m.pct)}</b> laps</span>`:`<span class="muted">${esc(r.laps)} laps</span>`):'<span class="muted small">no laps set</span>'}</label>`).join("")}
+function rbSum(d,m){const n=d.races.filter(r=>m.sel[r.id]).length;return n+" race"+(n===1?"":"s")+" selected"+(n&&d.races.some(r=>m.sel[r.id]&&r.done)?" · includes finished races":"")}
+function modalRBulk(){
+  const d=cur(),m=ui.modal,n=d.races.filter(r=>m.sel[r.id]).length;
+  return `<div class="dlg" role="dialog" aria-label="Bulk edit races" data-s="${ui.series}" style="max-width:720px"><header><h3>Bulk edit races</h3><span class="muted">${esc(d.name)} · ${d.year}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body" style="display:flex;flex-direction:column;gap:16px">
+    <div class="sect"><h3 style="font-size:17px">1. Which races</h3>
+      <div class="row"><button class="btn sm" data-act="rbAll">All</button><button class="btn sm" data-act="rbNone">None</button><span class="small muted" id="rbSum">${rbSum(d,m)}</span></div>
+      <div id="rbList" style="max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px">${rbList(d,m)}</div></div>
+    <div class="sect"><h3 style="font-size:17px">2. Change the number of laps</h3>
+      <div class="row" style="gap:12px"><label class="fld">Change by (%)<input type="number" min="-200" max="200" step="1" data-rbp="pct" value="${m.pct}" style="width:110px"></label>
+        <input type="range" min="-200" max="200" step="5" data-rbp="pct" value="${m.pct}" aria-label="Percent change" style="flex:1;min-width:140px"></div>
+      <div class="small muted">10 makes each race 10% longer, -50 halves it, and 100 doubles it. Laps are rounded to whole laps, and a race never goes below 1 lap. Races with no lap count are skipped.</div>
+      <div><button class="btn pri" data-act="rbLaps" data-confirm="1" ${n?"":"disabled"}>Change laps</button></div></div>
+    <div class="sect"><h3 style="font-size:17px">3. Randomize the order</h3>
+      <label class="row" style="gap:8px"><input type="checkbox" class="chk" data-rbp="keep" ${m.keep?"checked":""}> <span>Keep dates in their slots (the races move, the dates stay)</span></label>
+      <div class="small muted">Only the selected races are shuffled, and they swap places among the spots they already occupy. Races you leave unchecked stay where they are. Pick at least two.</div>
+      <div><button class="btn pri" data-act="rbShuf" data-confirm="1" ${n>1?"":"disabled"}>Shuffle selected races</button></div></div>
+  </div></div>`;
+}
 function modalSugg(){
   const d=cur(),mo=ui.modal,done=d.races.filter(r=>r.done).length;
   const minS=mo.min!=null?mo.min:Math.max(3,Math.ceil(done*.25));
@@ -1301,7 +1322,7 @@ function modalDriver(){
 function renderModal(){
   const el=$("#modal");
   if(!ui.modal){el.innerHTML="";return}
-  el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="track"?modalTrack():modalDriver();
+  el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="track"?modalTrack():modalDriver();
 }
 function openRace(id,exh){
   const d=cur(),r=(exh?(d.exh||[]):d.races).find(x=>x.id===id);if(!r)return;
@@ -1528,8 +1549,9 @@ function patchCar(buf,r){ // returns {bytes,name,changed} or null
 }
 function carFor(d,buf){ // -> {bytes}|"nomatch"|"same"
   const lc=v=>String(v||"").replace(/\s+/g," ").trim().toLowerCase();
+  const nn=v=>String(v==null?"":v).trim().replace(/^0+(?=\d)/,"");
   let c=null;try{c=parseCar(buf)}catch(e){}
-  const dr=c&&d.drivers.find(x=>lc(x.name)===lc(c.name));
+  const dr=c&&nn(c.num)!==""&&d.drivers.find(x=>lc(x.name)===lc(c.name)&&nn(x.num)===nn(c.num));
   if(!c||!dr||!dr.r||!Object.keys(dr.r).length)return "nomatch";
   const res=patchCar(buf,dr.r);return res&&res.changed?{bytes:res.bytes}:"same";
 }
@@ -1552,7 +1574,7 @@ async function exportCars(){
             const w=await h.createWritable();await w.write(r.bytes);await w.close();n++;
           }catch(e){failed++}
         }
-        toast(n+" car file"+(n===1?"":"s")+" updated in that folder"+(nomatch?", "+nomatch+" skipped (no match or no ratings)":"")+(failed?", "+failed+" couldn't be written":""));
+        toast(n+" car file"+(n===1?"":"s")+" updated in that folder"+(nomatch?", "+nomatch+" skipped (name and car number must both match a driver with ratings)":"")+(failed?", "+failed+" couldn't be written":""));
         return;
       }catch(e){toast("Couldn't read that folder, so the files are offered as a download instead")}
     }
@@ -1564,7 +1586,7 @@ async function exportCars(){
     const fs=[...inp.files];if(!fs.length)return;
     const out=[];let unmatched=0;
     for(const f of fs){const r=carFor(d,await f.arrayBuffer());if(r==="nomatch"||r==="same"){unmatched++;continue}out.push({name:f.name,data:r.bytes})}
-    if(!out.length){toast("No car files matched drivers with ratings in "+d.year);return}
+    if(!out.length){toast("No car files matched a driver with ratings in "+d.year+". Both the name and the car number have to match.");return}
     dl.save({filename:(d.name.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"")||"series")+"-"+d.year+"-car-files.zip",data:makeZip(out)}).then(()=>toast(out.length+" car file"+(out.length===1?"":"s")+" exported"+(unmatched?", "+unmatched+" skipped":""))).catch(e=>{if(e&&e.code!=="declined")toast("Couldn't save the file")});
   };
   inp.click();
@@ -1672,6 +1694,19 @@ const ACT={
         else if(v){const f=m.op==="add"?(t=>t+m.a):(t=>t*m.a/100);let a=cl(f(v.a)),b=cl(f(v.b));if(a>b)[a,b]=[b,a];x.r[k]={a,b};ch=true}});
       if(ch)n++});
     touch(docId(d.series,d.year));ui.modal=null;renderModal();toast(n+" driver"+(n===1?"":"s")+" updated")},
+  rbulk:()=>{const d=cur(),sel={};d.races.forEach(r=>sel[r.id]=true);ui.modal={type:"rbulk",sel,pct:10,keep:true};renderModal();return "nr"},
+  rbAll:()=>{const d=cur();d.races.forEach(r=>ui.modal.sel[r.id]=true);renderModal();return "nr"},
+  rbNone:()=>{ui.modal.sel={};renderModal();return "nr"},
+  rbLaps:()=>{const d=cur(),m=ui.modal;let n=0;
+    if(!m.pct){toast("Set a percent other than 0 first");return "nr"}
+    d.races.forEach(r=>{if(m.sel[r.id]&&num(r.laps)>0){r.laps=rbNew(r.laps,m.pct);n++}});
+    touch(docId(d.series,d.year));ui.modal=null;renderModal();toast(n+" race"+(n===1?"":"s")+" changed by "+(m.pct>0?"+":"")+m.pct+"%")},
+  rbShuf:()=>{const d=cur(),m=ui.modal,idx=[];d.races.forEach((r,i)=>{if(m.sel[r.id])idx.push(i)});
+    if(idx.length<2){toast("Pick at least two races to shuffle");return "nr"}
+    const orig=idx.map(i=>d.races[i]),dates=idx.map(i=>d.races[i].date);let sh=orig.slice();
+    for(let t=0;t<10;t++){for(let i=sh.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[sh[i],sh[j]]=[sh[j],sh[i]]}if(sh.some((r,i)=>r!==orig[i]))break}
+    idx.forEach((ri,k)=>{d.races[ri]=sh[k];if(m.keep)sh[k].date=dates[k]});
+    touch(docId(d.series,d.year));ui.modal=null;renderModal();toast("Shuffled "+idx.length+" races")},
   adddrv:()=>{const d=cur();d.drivers.push(mkDriver());ui.filter="";touch(docId(d.series,d.year))},
   deldrv:b=>{const d=cur();d.drivers=d.drivers.filter(x=>x.id!==b.dataset.id);touch(docId(d.series,d.year))},
   sortDrv:()=>{const d=cur();d.drivers.sort((a,b)=>num(a.num)-num(b.num)||a.name.localeCompare(b.name));touch(docId(d.series,d.year))},
@@ -1869,6 +1904,12 @@ document.addEventListener("change",e=>{
     if(t.dataset.tmv){const v=t.value===""?"":Math.max(0,Math.min(100,Math.round(num(t.value))));(mo.vals[t.dataset.t]=mo.vals[t.dataset.t]||{})[t.dataset.tmv]=v;t.value=v;const td=t.closest("td");if(td)td.style.background=v===""?"transparent":heat(v);return}
     if(t.dataset.tmall){if(t.value==="")return;const v=Math.max(0,Math.min(100,Math.round(num(t.value)))),k=t.dataset.tmall;Object.keys(mo.vals).forEach(tm=>{mo.vals[tm][k]=v});setTimeout(renderModal,0);return}
     if(t.dataset.tmp){const k=t.dataset.tmp;mo[k]=k==="target"?+t.value:num(t.value);if(k==="target"){const dd=docs[docId(ui.series,mo.target)];if(dd){mo.vals=tmInit(dd);mo.init=JSON.parse(JSON.stringify(mo.vals))}}setTimeout(renderModal,0);return}}
+  if(ui.modal&&ui.modal.type==="rbulk"){const mo=ui.modal;
+    if(t.dataset.rb){mo.sel[t.dataset.rb]=t.checked;setTimeout(renderModal,0);return}
+    if(t.dataset.rbp==="keep"){mo.keep=t.checked;return}
+    if(t.dataset.rbp==="pct"){const v=Math.max(-200,Math.min(200,Math.round(num(t.value))));mo.pct=v;
+      document.querySelectorAll("[data-rbp=pct]").forEach(e=>{e.value=v});
+      const L=document.getElementById("rbList");if(L)L.innerHTML=rbList(d,mo);return}}
   if(ui.modal&&ui.modal.type==="bulk"){const mo=ui.modal;
     if(t.dataset.bk){mo.sel[t.dataset.bk]=t.checked;setTimeout(renderModal,0);return}
     if(t.dataset.bkr){mo.keys[t.dataset.bkr]=t.checked;setTimeout(renderModal,0);return}
