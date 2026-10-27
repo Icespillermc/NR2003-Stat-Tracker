@@ -951,27 +951,39 @@ async function ageRun(m){
   m.status=fail&&!m.rows.length?"error":"done";renderModal();
 }
 function vDrivers(d0){
-  const f=ui.filter.toLowerCase(),by=new Map();
-  SERIES.forEach(([k,n0])=>{const dd=docs[docId(k,ui.year)];if(!dd)return;
-    dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(!key)return;let e=by.get(key);if(!e){e={name:x.name,age:"",ent:[]};by.set(key,e)}
-      if(e.age===""&&x.age!==""&&x.age!=null)e.age=x.age;
-      e.ent.push({s:k,sn:dd.name||n0,id:x.id,num:x.num,team:x.team,make:x.make})})});
-  let list=[...by.values()].filter(e=>!f||(e.name+" "+e.ent.map(z=>z.num+" "+z.team+" "+z.sn).join(" ")).toLowerCase().includes(f));
+  const f=ui.filter.toLowerCase(),by=new Map(),Y=ui.year;
+  Object.values(docs).filter(x=>x&&x.series).sort((a,b)=>a.year-b.year).forEach(dd=>{
+    dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(!key)return;let e=by.get(key);if(!e){e={name:x.name,retired:false,yrs:new Map()};by.set(key,e)}
+      if(x.retired)e.retired=true;
+      if(!e.yrs.has(dd.year))e.yrs.set(dd.year,[]);
+      e.yrs.get(dd.year).push({s:dd.series,sn:dd.name||dd.series,id:x.id,num:x.num,team:x.team,age:x.age,year:dd.year})})});
+  const people=[...by.values()].map(e=>{
+    const ys=[...e.yrs.keys()].sort((a,b)=>a-b),show=e.yrs.has(Y)?Y:(ys.filter(y=>y<Y).pop()||ys[0]),ent=e.yrs.get(show);
+    const age=(ent.find(z=>z.age!==""&&z.age!=null)||{}).age;
+    return {name:e.name,age:age==null?"":age,ent,year:show,status:e.retired?"Retired":e.yrs.has(Y)?"Active":"Inactive"}});
+  const cnt={all:people.length,Active:0,Inactive:0,Retired:0};people.forEach(x=>cnt[x.status]++);
+  const flt=ui.drvFilter||"all";
+  let list=people.filter(e=>(flt==="all"||e.status===flt)&&(!f||(e.name+" "+e.status+" "+e.ent.map(z=>z.num+" "+z.team+" "+z.sn).join(" ")).toLowerCase().includes(f)));
   const c=ui.drvSort||"name",dir=ui.drvDir||1,first=(e,fld)=>String((e.ent[0]||{})[fld]||"");
   list.sort((a,b)=>{let r;
     if(c==="age")r=(a.age===""?999:+a.age)-(b.age===""?999:+b.age);
     else if(c==="num")r=num(first(a,"num"))-num(first(b,"num"));
     else if(c==="team")r=first(a,"team").localeCompare(first(b,"team"),undefined,{sensitivity:"base"});
     else if(c==="series")r=first(a,"sn").localeCompare(first(b,"sn"));
+    else if(c==="status")r=a.status.localeCompare(b.status);
+    else if(c==="year")r=a.year-b.year;
     else r=a.name.localeCompare(b.name);
     return r*dir||a.name.localeCompare(b.name)});
-  const head=[["name","Driver"],["age","Age"],["num","#"],["team","Team"],["series","Series"]].map(([k,n])=>`<th class="s ${c===k?"on":""}" data-act="sortDrvs" data-v="${k}">${n}${c===k?(dir>0?" ▲":" ▼"):""}</th>`).join("");
+  const head=[["name","Driver"],["status","Status"],["age","Age"],["num","#"],["team","Team"],["series","Series"],["year","Season"]].map(([k,n])=>`<th class="s ${c===k?"on":""}" data-act="sortDrvs" data-v="${k}">${n}${c===k?(dir>0?" ▲":" ▼"):""}</th>`).join("");
+  const pill={Active:"ok",Inactive:"",Retired:"rk"};
   const rows=list.map(e=>{const one=z=>e.ent.map(z).join("");
-    return `<tr><td class="name"><a href="#" data-act="drvAt" data-s="${e.ent[0].s}" data-id="${e.ent[0].id}">${esc(e.name)}</a></td><td class="n">${e.age===""?'<span class="muted">–</span>':esc(e.age)}</td>
-    <td>${one(z=>`<div><span class="car">${esc(z.num)}</span></div>`)}</td><td>${one(z=>`<div>${esc(z.team)||'<span class="muted">–</span>'}</div>`)}</td><td>${one(z=>`<div><a href="#" data-act="series-view" data-v="${z.s}" data-w="roster">${esc(z.sn)}</a></div>`)}</td></tr>`}).join("");
-  return `<div class="row"><h2>Drivers · ${ui.year} · ${list.length}</h2><span class="sp"></span><input type="text" id="filter" placeholder="Filter by name, team, #, series" value="${esc(ui.filter)}" style="width:240px"><button class="btn" data-act="ageLookup" title="Find real drivers' birth dates and fill in their ages for this season">Look up real ages</button></div>
-    <div class="help">Every driver in all series for ${ui.year}. A driver who runs in more than one series is listed once with each number, team and series. Open a driver to edit their age.</div>
-    <div class="card tw">${list.length?`<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No drivers yet.</div>'}</div>`;
+    return `<tr><td class="name"><a href="#" data-act="drvAt" data-s="${e.ent[0].s}" data-id="${e.ent[0].id}" data-y="${e.year}">${esc(e.name)}</a></td><td><span class="pill ${pill[e.status]}">${e.status}</span></td><td class="n">${e.age===""?'<span class="muted">–</span>':esc(e.age)}</td>
+    <td>${one(z=>`<div><span class="car">${esc(z.num)}</span></div>`)}</td><td>${one(z=>`<div>${esc(z.team)||'<span class="muted">–</span>'}</div>`)}</td><td>${one(z=>`<div><a href="#" data-act="serAt" data-s="${z.s}" data-y="${z.year}">${esc(z.sn)}</a></div>`)}</td><td class="n">${e.year}</td></tr>`}).join("");
+  const seg=`<div class="seg" role="group" aria-label="Filter drivers">${[["all","All Drivers",cnt.all],["Active","Active Drivers",cnt.Active],["Inactive","Inactive Drivers",cnt.Inactive],["Retired","Retired Drivers",cnt.Retired]].map(([v,n,k])=>`<button data-act="drvFilter" data-v="${v}" class="${flt===v?"on":""}">${n} ${k}</button>`).join("")}</div>`;
+  return `<div class="row"><h2>Drivers · ${list.length}</h2><span class="sp"></span><input type="text" id="filter" placeholder="Filter by name, team, #, series" value="${esc(ui.filter)}" style="width:240px"><button class="btn" data-act="ageLookup" title="Find real drivers' birth dates and fill in their ages for this season">Look up real ages</button></div>
+    <div class="row">${seg}</div>
+    <div class="help"><b>Active</b> drivers are on a roster in the ${Y} season. <b>Inactive</b> drivers raced in other seasons but are not in ${Y}. <b>Retired</b> drivers are the ones marked retired in their profile. The number, team and series shown are from the season in the last column. A driver who runs in more than one series is listed once.</div>
+    <div class="card tw">${list.length?`<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No drivers match.</div>'}</div>`;
 }
 function vRoster(d){
   const f=ui.filter.toLowerCase();
@@ -1502,7 +1514,7 @@ function modalDriver(){
     const ar=avgRate(dx,"d");return `<tr><td>${dd.year}</td><td class="n"><span class="car">${esc(dx.num)}</span></td><td class="n">${dx.age===""||dx.age==null?"–":esc(dx.age)}</td><td>${esc(dx.team)}</td><td class="n">${z.starts}</td><td class="n">${z.wins}</td><td class="n">${z.poles}</td><td class="n">${z.t5}</td><td class="n">${z.t10}</td><td class="n">${z.led}</td><td class="n">${z.avgF!=null?fmt(z.avgF):"–"}</td><td class="n">${z.pts}</td><td class="n">${ar==null?"–":f1(ar)}</td></tr>`}).join("");
   return `<div class="dlg" role="dialog" aria-label="Driver card" data-s="${ui.series}"><header><span class="car" style="font-size:22px">${esc(dr.num)}</span><h3>${esc(dr.name)}</h3><span class="muted">${esc(dr.team)} ${dr.make?"· "+esc(dr.make):""}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body"><div class="grid2"><div><h3>Driver ratings <span class="muted" style="font-size:15px">avg ${avgRate(dr,"d")==null?"–":f1(avgRate(dr,"d"))}</span></h3>${RATE.filter(r=>r[2]==="d").map(([c,n])=>{const v=rg(dr,c);return `<div class="rt"><span>${n}</span><i><b style="margin-left:${v?v.a:0}%;width:${v?Math.max(v.b-v.a,1):0}%"></b></i><span class="n">${rtxt(v)}</span></div>`}).join("")}</div>
-  <div><h3>${d.year} season</h3><dl class="kv" style="margin-top:6px"><dt>Age</dt><dd><input type="number" class="w-s" min="0" max="120" data-ed="drv" data-id="${dr.id}" data-k="age" value="${esc(dr.age==null?"":dr.age)}" aria-label="Age" placeholder="–"></dd><dt>Points</dt><dd><b>${s.pts}</b></dd><dt>Starts</dt><dd>${s.starts}</dd><dt>Wins / Poles</dt><dd>${s.wins} / ${s.poles}</dd><dt>Top 5 / Top 10</dt><dd>${s.t5} / ${s.t10}</dd><dt>Laps led</dt><dd>${s.led}</dd><dt>Avg start / finish</dt><dd>${s.avgS!=null?fmt(s.avgS):"–"} / ${s.avgF!=null?fmt(s.avgF):"–"}</dd><dt>DNFs</dt><dd>${s.dnf}</dd></dl></div></div>
+  <div><h3>${d.year} season</h3><dl class="kv" style="margin-top:6px"><dt>Retired</dt><dd><label class="row" style="gap:6px"><input type="checkbox" class="chk" data-ed="drv" data-id="${dr.id}" data-k="retired" ${dr.retired?"checked":""}> <span class="small muted">No longer racing</span></label></dd><dt>Age</dt><dd><input type="number" class="w-s" min="0" max="120" data-ed="drv" data-id="${dr.id}" data-k="age" value="${esc(dr.age==null?"":dr.age)}" aria-label="Age" placeholder="–"></dd><dt>Points</dt><dd><b>${s.pts}</b></dd><dt>Starts</dt><dd>${s.starts}</dd><dt>Wins / Poles</dt><dd>${s.wins} / ${s.poles}</dd><dt>Top 5 / Top 10</dt><dd>${s.t5} / ${s.t10}</dd><dt>Laps led</dt><dd>${s.led}</dd><dt>Avg start / finish</dt><dd>${s.avgS!=null?fmt(s.avgS):"–"} / ${s.avgF!=null?fmt(s.avgF):"–"}</dd><dt>DNFs</dt><dd>${s.dnf}</dd></dl></div></div>
   <h3 style="margin-top:16px">By season</h3><div class="tw"><table><thead><tr><th>Year</th><th class=n>#</th><th class=n>Age</th><th>Team</th><th class=n>Starts</th><th class=n>Wins</th><th class=n>Poles</th><th class=n>T5</th><th class=n>T10</th><th class=n>Led</th><th class=n>Avg fin</th><th class=n>Pts</th><th class=n>Avg rating</th></tr></thead><tbody>${yrs}</tbody></table></div>
   ${(()=>{const xs=(d.exh||[]).map(ev=>{const x=(ev.res||[]).find(z=>z.d===dr.id);return x&&(!ui.logWins||x.f===1)?`<tr><td><a href="#" data-act="exrace" data-id="${ev.id}" data-from="${dr.id}">${esc(ev.name)||"Event"}</a></td><td>${esc(ev.kind||"")}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td></tr>`:""}).join("");return xs?`<h3 style="margin-top:16px">${d.year} exhibitions</h3><div class="tw"><table><thead><tr><th>Event</th><th>Type</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th></tr></thead><tbody>${xs}</tbody></table></div>`:""})()}
   <div class="row" style="margin-top:16px"><h3>${d.year} race log</h3><span class="sp"></span>${logSeg()}</div>${log?`<div class="tw"><table><thead><tr><th class=n>#</th><th>Race</th><th>Track</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th><th class=n>Pts</th></tr></thead><tbody>${log}</tbody></table></div>`:'<p class="muted">'+(ui.logWins?"No wins this season.":"No results yet this season.")+'</p>'}</div></div>`;
@@ -2015,7 +2027,9 @@ const ACT={
     ui.modal=null;renderModal();toast(n+" age"+(n===1?"":"s")+" updated for "+ui.year)},
   recScope:b=>{ui.recScope=b.dataset.v},
   sortDrvs:b=>{const c=b.dataset.v;if((ui.drvSort||"name")===c)ui.drvDir=-(ui.drvDir||1);else{ui.drvSort=c;ui.drvDir=1}},
-  drvAt:b=>{ui.series=b.dataset.s;ui.modal={type:"driver",id:b.dataset.id};renderModal()},
+  drvAt:b=>{ui.series=b.dataset.s;if(b.dataset.y)ui.year=+b.dataset.y;ui.modal={type:"driver",id:b.dataset.id};renderModal()},
+  serAt:b=>{ui.series=b.dataset.s;if(b.dataset.y)ui.year=+b.dataset.y;ui.view="roster";ui.filter=""},
+  drvFilter:b=>{ui.drvFilter=b.dataset.v},
   sortRos:b=>{const c=b.dataset.v;if(ui.rosSort===c)ui.rosDir*=-1;else{ui.rosSort=c;ui.rosDir=(c==="pf"||c==="rookie")?-1:1}},
   clearRoster:()=>{const d=cur();d.drivers=[];d.races.forEach(r=>{r.res=[];r.done=false;r.cautions="";r.lc=""});(d.exh||[]).forEach(r=>{r.res=[];r.done=false});ui.filter="";touch(docId(d.series,d.year));toast("Roster cleared")},
   race:b=>{openRace(b.dataset.id);if(ui.modal){if(b.dataset.from)ui.modal.back={type:"driver",id:b.dataset.from};else if(b.dataset.fromteam)ui.modal.back={type:"team",team:b.dataset.fromteam}}return "nr"},
@@ -2186,6 +2200,7 @@ document.addEventListener("change",e=>{
   else if(ed==="drv"){const x=drvOf(d,t.dataset.id);if(x){
     if(k==="age"){const a=String(val).trim()===""?"":Math.max(0,Math.min(120,Math.round(num(val))));t.value=a;x.age=a;
       Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd!==d&&dd.year===d.year)dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()){z.age=a;touch(did)}})})}
+    else if(k==="retired"){const on=!!val;Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()&&!!z.retired!==on){z.retired=on;ch=true}});if(ch)touch(did)}});x.retired=on}
     else x[k]=val}}
   else if(ed==="rate"){const x=drvOf(d,t.dataset.id);if(x){x.r=x.r||{};const td=t.closest("td"),ia=td.querySelector('[data-e="a"]'),ib=td.querySelector('[data-e="b"]');
     if(ia.value===""&&ib.value==="")delete x.r[k];
