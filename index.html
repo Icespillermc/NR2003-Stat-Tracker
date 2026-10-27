@@ -169,7 +169,7 @@ function refreshSeries(){
 const codesOf=k=>{const dd=docsFor(k).find(x=>x.code);return dd?String(dd.code).split(/[\s,;]+/).filter(Boolean):[]};
 const SER_BASE={NCS:"cup",NBS:"busch",NXS:"busch",NNS:"busch",NTS:"truck",NCTS:"truck",CTS:"truck"};
 function codeMap(){const m=Object.assign({},SER_BASE);SERIES.forEach(([k])=>codesOf(k).forEach(c=>{m[c.toUpperCase()]=k}));return m}
-const VIEWS=[["overview","Overview"],["schedule","Schedule"],["exhib","Exhibitions"],["standings","Standings"],["stats","Stats"],["teams","Teams"],["tracks","Tracks"],["history","History"],["roster","Roster"],["ratings","Ratings"],["setup","Setup"]];
+const VIEWS=[["overview","Overview"],["schedule","Schedule"],["exhib","Exhibitions"],["standings","Standings"],["stats","Stats"],["teams","Teams"],["tracks","Tracks"],["history","History"],["drivers","Drivers"],["roster","Roster"],["ratings","Ratings"],["setup","Setup"]];
 const RATE=[["agg","Aggression","d"],["con","Consistency","d"],["fin","Finishing","d"],["qua","Qualifying","d"],["st","Short track","d"],["spd","Speedway","d"],["ss","Superspeedway","d"],["rd","Road course","d"],["pcc","Pit consistency","p"],["pcs","Pit speed","p"],["pcg","Pit strategy","p"],["vae","Aero","v"],["vch","Chassis","v"],["ven","Engine","v"],["vre","Reliability","v"]];
 const AIMAP={aiParamDriverAggression:"agg",aiParamDriverConsistency:"con",aiParamDriverFinishing:"fin",aiParamDriverQualifying:"qua",aiParamDriverShortTrack:"st",aiParamDriverSpeedway:"spd",aiParamDriverSuperspeedway:"ss",aiParamDriverRoadCourse:"rd",aiParamPitcrewConsistency:"pcc",aiParamPitcrewSpeed:"pcs",aiParamPitcrewStrategy:"pcg",aiParamVehicleAero:"vae",aiParamVehicleChassis:"vch",aiParamVehicleEngine:"ven",aiParamVehicleReliability:"vre"};
 function rg(x,k){const v=x.r&&x.r[k];if(v==null)return null;return typeof v==="number"?{a:Math.round(v),b:Math.round(v)}:{a:Math.round(v.a),b:Math.round(v.b)}}
@@ -197,6 +197,7 @@ function playoffState(d){
   const drv=new Map(d.drivers.filter(x=>x.pf).map(x=>[x.id,x]));
   const reg=new Map(),rw=new Map();drv.forEach((x,id)=>{reg.set(id,0);rw.set(id,0)});
   for(let i=0;i<after;i++)(d.races[i].res||[]).forEach(x=>{if(!drv.has(x.d))return;reg.set(x.d,reg.get(x.d)+(pmap[i].get(x.d)||0));if(x.f===1)rw.set(x.d,rw.get(x.d)+1)});
+  const dpo=duelPts(d);if(dpo.on)(d.exh||[]).forEach(ev=>{if(ev.kind==="Duel"&&ev.done)(ev.res||[]).forEach(x=>{if(reg.has(x.d))reg.set(x.d,reg.get(x.d)+(dpo.pts[x.f-1]||0))})});
   const ids=[...drv.keys()],cmp=(a,b)=>(reg.get(b)-reg.get(a))||(rw.get(b)-rw.get(a));
   const n0=Math.min(sizes[0],ids.length);let field;
   if(po.winAdv){const w=ids.filter(i=>rw.get(i)>0).sort(cmp),nw=ids.filter(i=>rw.get(i)===0).sort(cmp);field=w.slice(0,n0).concat(nw.slice(0,Math.max(0,n0-w.length)))}
@@ -206,7 +207,7 @@ function playoffState(d){
   for(let r=0;r<sizes.length;r++){
     const n=rcs[r]||1,last=r===sizes.length-1,keep=last?1:Math.min(sizes[r+1],curF.length);
     const rs=d.races.slice(idx,idx+n),complete=rs.length===n&&rs.every(x=>x.done);
-    const rows=curF.map(id=>{let pts=(resets[r]!=null?resets[r]:0)+(po.win||0)*(carried.get(id)||0),wins=0,best=99;
+    const rows=curF.map(id=>{let pts=(resets[r]!=null?resets[r]:0)+0,wins=0,best=99;
       for(let i=idx;i<idx+n&&i<d.races.length;i++){const rr=(d.races[i].res||[]).find(z=>z.d===id);if(d.races[i].done&&rr){pts+=pmap[i].get(id)||0;if(rr.f===1)wins++;if(rr.f<best)best=rr.f}}
       return {id,dr:drv.get(id),pts,wins,best}});
     rows.sort((a,b)=>b.pts-a.pts||b.wins-a.wins);
@@ -241,14 +242,15 @@ function playoffPanel(d){
   const out=rd.complete&&!rd.last?(()=>{const e=rd.rows.filter(x=>!x.adv);return e.length?`<div><b>Eliminated in the ${esc(rd.label)}:</b> ${e.map(x=>`<span class="car">${esc(x.dr.num)}</span> ${esc(x.dr.name)}`).join(" · ")}</div>`:""})():"";
   return `<section class="card pad sect"><div class="row"><h3>Playoffs</h3><span class="sp"></span><div class="seg">${ps.rounds.map((r,i)=>`<button data-act="poRound" data-v="${i}" class="${i===ri?"on":""}">${esc(r.label)}</button>`).join("")}</div></div>
     ${ps.champion?`<div class="help"><b>Champion:</b> ${carTag(ps.champion.dr)}</div>`:""}
-    <div class="small muted">${esc(rd.label)} · races ${rd.start+1}${rd.end>rd.start?"–"+(rd.end+1):""} · ${rd.complete?"complete":rd.started?"in progress":"not started"} · points reset to ${(parseList(po.resets)[ps.rounds.indexOf(rd)])||0} plus ${po.win} per playoff win</div>
+    <div class="small muted">${esc(rd.label)} · races ${rd.start+1}${rd.end>rd.start?"–"+(rd.end+1):""} · ${rd.complete?"complete":rd.started?"in progress":"not started"} · points reset to ${(parseList(po.resets)[ps.rounds.indexOf(rd)])||0}</div>
     <div class="tw"><table><thead><tr><th class="n">Pos</th><th>#</th><th>Driver</th><th class="n">Round pts</th><th class="n">Wins</th><th>Status</th></tr></thead><tbody>${body}</tbody></table></div>
     ${out?`<div class="small muted" style="display:flex;flex-direction:column;gap:3px">${out}</div>`:""}</section>`;
 }
 const STAGE_DEF=[10,9,8,7,6,5,4,3,2,1];
 const STAGE_PRESETS={nascar:["NASCAR stages (10 down to 1)",[...STAGE_DEF]],top5:["Top 5 only (5 down to 1)",[5,4,3,2,1]],top3:["Top 3 only (3, 2, 1)",[3,2,1]]};
 const stg=d=>{const g=d.settings.stages||{};return {on:!!g.on,count:g.count||2,pts:d.settings.stagePts&&d.settings.stagePts.length?d.settings.stagePts:STAGE_DEF}};
-const presetsFor=k=>k==="stagePts"?STAGE_PRESETS:PRESETS;
+const presetsFor=k=>k==="stagePts"||k==="duelPts"?STAGE_PRESETS:PRESETS;
+const duelPts=d=>{const g=d.settings.duel||{};return {on:!!g.on,pts:d.settings.duelPts&&d.settings.duelPts.length?d.settings.duelPts:STAGE_DEF}};
 const PRESETS={
   y2026:["NASCAR 2026 (55 for a win, then 35, 34 … 1)",defaultTable()],
   nextel:["NASCAR 175 system (175 down to 34)",table175()],
@@ -266,12 +268,12 @@ function pointsRow(d,key,label,allowSame){
 }
 function modalPoints(){
   const d=cur(),key=ui.modal.key,arr=d.settings[key];if(!arr)return "";
-  const label=key==="stagePts"?"Stage finishes":key==="tablePost"?"Chase / playoff races":"Regular season";
+  const label=key==="stagePts"?"Stage finishes":key==="duelPts"?"Duel finishes":key==="tablePost"?"Chase / playoff races":"Regular season";
   const rows=arr.map((v,i)=>`<tr><td class="rank">${ord(i+1)}</td><td><input type="number" class="w-s" data-pt="${i}" value="${v}" aria-label="${ord(i+1)} place points"></td></tr>`).join("");
   return `<div class="dlg" role="dialog" aria-label="Points per finish" data-s="${ui.series}" style="max-width:520px"><header><h3>Points per finish</h3><span class="muted">${label} · ${d.year}</span><span class="sp"></span><button class="btn sm" data-act="close">Done</button></header>
   <div class="body"><div class="row" style="margin-bottom:10px"><label class="fld">Start from a preset<select data-ptpreset style="width:260px"><option value="">Choose…</option>${Object.keys(presetsFor(key)).map(k=>`<option value="${k}">${presetsFor(key)[k][0]}</option>`).join("")}</select></label></div>
   <div class="tw"><table><thead><tr><th>Position</th><th>Points</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-  <footer><button class="btn" data-act="ptAdd">+ Add position</button><button class="btn" data-act="ptDel" ${arr.length<2?"disabled":""}>Remove last</button><span class="sp"></span><span class="small muted">${key==="stagePts"?"Positions after the last one listed get no stage points.":"Lap led, most led and pole bonuses are set separately."}</span></footer></div>`;
+  <footer><button class="btn" data-act="ptAdd">+ Add position</button><button class="btn" data-act="ptDel" ${arr.length<2?"disabled":""}>Remove last</button><span class="sp"></span><span class="small muted">${key==="stagePts"||key==="duelPts"?"Positions after the last one listed get no "+(key==="duelPts"?"duel":"stage")+" points.":"Lap led, most led and pole bonuses are set separately."}</span></footer></div>`;
 }
 const KINDS=["Clash","Duel","All-Star","Open","Other"];
 const DEF_COLORS={cup:"#111111",busch:"#1b8f55",truck:"#d4401c"};
@@ -440,20 +442,22 @@ function agg(list,keyFn){
     const dm=new Map(d.drivers.map(x=>[x.id,x]));
     const get=dr=>{
       const key=keyFn(d,dr);let s=m.get(key);
-      if(!s){s={key,pts:0,reg:0,post:0,regWins:0,starts:0,wins:0,t5:0,t10:0,t20:0,poles:0,led:0,dnf:0,sf:0,ss:0,best:99,laps:0,stw:0,stp:0,pp:0};m.set(key,s)}
+      if(!s){s={key,pts:0,reg:0,post:0,regWins:0,starts:0,wins:0,t5:0,t10:0,t20:0,poles:0,led:0,dnf:0,sf:0,ss:0,best:99,laps:0,stw:0,stp:0,pp:0,dp:0};m.set(key,s)}
       return s;
     };
     d.drivers.forEach(dr=>{const s=get(dr);Object.assign(s,{id:dr.id,name:dr.name,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf,rookie:dr.rookie})});
+    const dpo=duelPts(d);
+    if(dpo.on)(d.exh||[]).forEach(ev=>{if(ev.kind!=="Duel"||!ev.done)return;(ev.res||[]).forEach(x=>{const dr0=dm.get(x.d),v=dpo.pts[x.f-1]||0;if(!dr0||!v)return;const s0=get(dr0);s0.pts+=v;s0.dp+=v;if(after)s0.reg+=v})});
     d.races.forEach((r,i)=>{
       if(!r.done)return;
       const pm=racePoints(d,r,i),sgc=stg(d),psx=postStart(d),regRace=psx==null||i<psx,ppS=+((d.settings.stages||{}).pp)||0;
-      if(sgc.on&&r.stg)r.stg.forEach(list=>(list||[]).forEach((id,j)=>{const dr0=dm.get(id);if(!dr0)return;const s0=get(dr0);s0.stp+=sgc.pts[j]||0;if(j===0){s0.stw++;if(regRace)s0.pp+=ppS}}));
+      if(sgc.on&&r.stg)r.stg.forEach(list=>(list||[]).forEach((id,j)=>{const dr0=dm.get(id);if(!dr0)return;const s0=get(dr0);s0.stp+=sgc.pts[j]||0;if(j===0){s0.stw++;s0.pp+=ppS}}));
       (r.res||[]).forEach(x=>{
         const dr=dm.get(x.d);if(!dr)return;
         const s=get(dr),p=pm.get(x.d)||0;
         s.pts+=p;
         if(after&&i<after){s.reg+=p;if(x.f===1)s.regWins++}else s.post+=p;
-        s.starts++;if(x.f===1){s.wins++;if(regRace)s.pp+=ppWin(d)}if(x.f<=5)s.t5++;if(x.f<=10)s.t10++;if(x.f<=20)s.t20++;
+        s.starts++;if(x.f===1){s.wins++;s.pp+=ppWin(d)}if(x.f<=5)s.t5++;if(x.f<=10)s.t10++;if(x.f<=20)s.t20++;
         if(x.s===1)s.poles++;
         s.led+=x.l||0;s.laps+=x.n||0;
         if(x.x&&x.x!=="Running")s.dnf++;
@@ -482,7 +486,7 @@ function standings(d,mode){
     else reg.forEach((s,i)=>{if(i<ch.size)pick.add(s.key)});
     reg.forEach(s=>{if(ch.within>0&&lead-s.reg<=ch.within)pick.add(s.key)});
     reg.forEach(s=>{if(pick.has(s.key)){seedAt.set(s.key,inC.size);inC.add(s.key)}});
-    list.forEach(s=>{if(inC.has(s.key)){s.chase=true;const k=seedAt.get(s.key);s.show=seeds.length?(seeds[Math.min(k,seeds.length-1)]+s.post):ch.base+s.pp+s.post}});
+    list.forEach(s=>{if(inC.has(s.key)){s.chase=true;const k=seedAt.get(s.key);s.show=seeds.length?(seeds[Math.min(k,seeds.length-1)]+s.post):ch.base+s.post}});
     list.sort((a,b)=>((b.chase?1:0)-(a.chase?1:0))||(a.chase?(b.show-a.show||tb(a,b)):(b.pts-a.pts||tb(a,b))));
   }
   list.forEach((s,i)=>s.rank=i+1);
@@ -511,7 +515,7 @@ function render(){
   if(!ready&&!Object.keys(docs).length){app.innerHTML=head()+'<div class="wrap"><main><div class="empty">Loading your league…</div></main></div>';return}
   const d=cur();let body="";
   if(!d)body='<div class="empty">No data for this season.</div>';
-  else body={overview:vOverview,schedule:vSchedule,standings:vStandings,stats:vStats,teams:vTeams,exhib:vExhib,tracks:vTracks,history:vHistory,roster:vRoster,ratings:vRatings,setup:vSetup}[ui.view](d);
+  else body={overview:vOverview,schedule:vSchedule,standings:vStandings,stats:vStats,teams:vTeams,exhib:vExhib,tracks:vTracks,history:vHistory,drivers:vDrivers,roster:vRoster,ratings:vRatings,setup:vSetup}[ui.view](d);
   app.setAttribute("data-s",ui.series);
   app.innerHTML=head()+`<div class="wrap"><main>${body}</main></div>`;
   if(fid!=null){const f=$("#filter");if(f){f.focus();f.setSelectionRange(fid,fid)}}
@@ -635,14 +639,14 @@ function vStandings(d){
     <p class="small muted">Points: ${esc(d.settings.table.slice(0,5).join("/"))}… per finish${d.settings.tablePost&&postStart(d)!=null?" (regular season), "+esc(d.settings.tablePost.slice(0,5).join("/"))+"… (postseason)":""}, +${d.settings.led} for leading a lap, +${d.settings.most} for most laps led${d.settings.pole?`, +${d.settings.pole} for the pole`:""}. Change this on the Setup tab.</p>`;
 }
 
-const STAT_COLS=[["starts","Starts"],["wins","Wins"],["winp","Win %"],["poles","Poles"],["t5","Top 5"],["t10","Top 10"],["t20","Top 20"],["led","Laps led"],["avgS","Avg start"],["avgF","Avg finish"],["best","Best"],["dnf","DNF"],["stw","Stage wins"],["stp","Stage pts"],["pp","Playoff pts"],["pts","Points"]];
+const STAT_COLS=[["starts","Starts"],["wins","Wins"],["winp","Win %"],["poles","Poles"],["t5","Top 5"],["t10","Top 10"],["t20","Top 20"],["led","Laps led"],["avgS","Avg start"],["avgF","Avg finish"],["best","Best"],["dnf","DNF"],["stw","Stage wins"],["stp","Stage pts"],["pp","Playoff pts"],["dp","Duel pts"],["pts","Points"]];
 const ASC=new Set(["avgS","avgF","best"]);
 function group(list,field){
   const g=new Map();
   list.forEach(s=>{
     const k=(s[field]||"").trim();if(!k||!s.starts)return;
-    let x=g.get(k);if(!x){x={name:k,drivers:0,starts:0,wins:0,poles:0,t5:0,t10:0,t20:0,led:0,dnf:0,sf:0,ss:0,pts:0,stw:0,stp:0,pp:0,best:99};g.set(k,x)}
-    x.drivers++;["starts","wins","poles","t5","t10","t20","led","dnf","sf","ss","stw","stp","pp"].forEach(f=>x[f]+=s[f]);x.best=Math.min(x.best,s.best);
+    let x=g.get(k);if(!x){x={name:k,drivers:0,starts:0,wins:0,poles:0,t5:0,t10:0,t20:0,led:0,dnf:0,sf:0,ss:0,pts:0,stw:0,stp:0,pp:0,dp:0,best:99};g.set(k,x)}
+    x.drivers++;["starts","wins","poles","t5","t10","t20","led","dnf","sf","ss","stw","stp","pp","dp"].forEach(f=>x[f]+=s[f]);x.best=Math.min(x.best,s.best);
   });
   g.forEach(x=>{x.avgF=x.starts?x.sf/x.starts:null;x.avgS=x.ss?x.ss/x.starts:null;x.winp=x.starts?100*x.wins/x.starts:0});
   return [...g.values()];
@@ -694,7 +698,7 @@ function vStats(d){
   const k=ui.statSort,dir=ui.statDir;
   const val=s=>{const v=s[k];return v==null||(k==="best"&&v===99)?null:v};
   list=[...list].sort((a,b)=>{const x=val(a),y=val(b);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return (x-y)*dir||b.wins-a.wins});
-  const cols=STAT_COLS.filter(c=>!(c[0]==="pts"&&(career||ui.statMode!=="drivers"))&&!((c[0]==="stw"||c[0]==="stp"||c[0]==="pp")&&!(stg(d).on||(career&&docsFor(ui.series).some(x=>stg(x).on)))));
+  const cols=STAT_COLS.filter(c=>!(c[0]==="pts"&&(career||ui.statMode!=="drivers"))&&!((c[0]==="stw"||c[0]==="stp"||c[0]==="pp")&&!(stg(d).on||(career&&docsFor(ui.series).some(x=>stg(x).on))))&&!(c[0]==="dp"&&!(duelPts(d).on||(career&&docsFor(ui.series).some(x=>duelPts(x).on)))));
   const top=(f,l)=>{const b=[...all].sort((a,c)=>c[f]-a[f])[0];return b&&b[f]>0?`<div class="card"><small>${l}</small><b>${esc(b.name)}</b><span class="muted small">${b[f]}</span></div>`:""};
   const leaders=ui.statMode==="drivers"?top("wins","Most wins")+top("poles","Most poles")+top("t5","Most top 5s")+top("led","Most laps led"):"";
   const nameHead=ui.statMode==="drivers"?"Driver":ui.statMode==="teams"?"Team":"Make";
@@ -742,7 +746,7 @@ function modalTeam(){
   ds.forEach(x=>{const s=m.get(x.id);for(const f in tot)tot[f]+=s[f]});
   const av=["d","p","v"].map(a=>meanOf(ds.map(x=>avgRate(x,a))));
   const makes=[...new Set(ds.map(x=>x.make).filter(Boolean))];
-  const wins=d.races.map((r,i)=>{const w=r.done?winnerOf(d,r):null;return w&&ds.includes(w)?`<tr><td class="n">${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.track)}</td><td>${carTag(w)}</td></tr>`:""}).join("");
+  const wins=d.races.map((r,i)=>{if(!r.done)return "";return (r.res||[]).filter(z=>(!ui.logWins||z.f===1)&&ds.some(x=>x.id===z.d)).map(z=>{const x=ds.find(q=>q.id===z.d);return `<tr><td class="n">${i+1}</td><td><a href="#" data-act="race" data-id="${r.id}" data-fromteam="${esc(name)}">${esc(r.name)||"Unnamed race"}</a></td><td>${esc(r.track)}</td><td>${carTag(x)}</td><td class="n">${z.s||"–"}</td><td class="n"><b>${z.f}</b></td><td class="n">${z.l||""}</td><td>${esc(z.x||"")}</td></tr>`}).join("")}).join("");
   const hist=docsFor(ui.series).map(dd=>{
     const dl=dd.drivers.filter(x=>teamName(x)===name);if(!dl.length)return "";
     const mm=agg([dd],(a,b)=>b.id),t={starts:0,wins:0,poles:0,t5:0,t10:0,led:0};
@@ -756,7 +760,7 @@ function modalTeam(){
     <div class="tiles">${[["Driver avg",av[0]],["Pit crew avg",av[1]],["Vehicle avg",av[2]]].map(([n,v])=>`<div style="background:${heat(v)}"><b>${v==null?"–":f1(v)}</b><small>${n}</small></div>`).join("")}</div>
     <div><h3>Cars</h3><div class="tw"><table><thead><tr><th>#</th><th>Driver</th><th>Sponsor</th><th>Make</th><th class="n">Pos</th><th class="n">Pts</th><th class="n">Wins</th><th class="n">Top 5</th><th class="n">Avg fin</th></tr></thead><tbody>${ds.map(x=>{const s=m.get(x.id);return `<tr><td><span class="car">${esc(x.num)}</span></td><td><a href="#" data-act="drv" data-id="${x.id}">${esc(x.name)}</a></td><td>${esc(x.sponsor)}</td><td>${esc(x.make)}</td><td class="n">${rank.get(x.id)||"–"}</td><td class="n"><b>${s.pts}</b></td><td class="n">${s.wins}</td><td class="n">${s.t5}</td><td class="n">${s.avgF!=null?fmt(s.avgF):"–"}</td></tr>`}).join("")}</tbody></table></div></div>
     <div><h3>By season</h3><div class="tw"><table><thead><tr><th>Year</th><th class="n">Cars</th><th class="n">Starts</th><th class="n">Wins</th><th class="n">Poles</th><th class="n">Top 5</th><th class="n">Top 10</th><th class="n">Laps led</th></tr></thead><tbody>${hist}</tbody></table></div></div>
-    <div><h3>${d.year} wins</h3>${wins?`<div class="tw"><table><thead><tr><th class="n">#</th><th>Race</th><th>Track</th><th>Driver</th></tr></thead><tbody>${wins}</tbody></table></div>`:'<p class="muted">No wins yet this season.</p>'}</div>
+    <div><div class="row"><h3>${d.year} race log</h3><span class="sp"></span>${logSeg()}</div>${wins?`<div class="tw"><table><thead><tr><th class="n">#</th><th>Race</th><th>Track</th><th>Driver</th><th class="n">Start</th><th class="n">Fin</th><th class="n">Led</th><th>Status</th></tr></thead><tbody>${wins}</tbody></table></div>`:`<p class="muted">${ui.logWins?"No wins this season.":"No results yet this season."}</p>`}</div>
   </div></div>`;
 }
 
@@ -787,27 +791,31 @@ function vHistory(d){
   const customs=docsFor(ui.series).flatMap(x=>(x.awards||[]).map(a=>({a,year:x.year,id:x.id})));
   const crow=docsFor(ui.series).slice().reverse().flatMap(x=>(x.awards||[]).map(a=>`<tr><td>${x.year}</td><td>${x.year===d.year?`<input type="text" class="w-l" data-ed="award" data-id="${a.id}" data-k="name" value="${esc(a.name)}" placeholder="Award name">`:esc(a.name)}</td><td>${x.year===d.year?`<input type="text" class="w-l" data-ed="award" data-id="${a.id}" data-k="winner" value="${esc(a.winner)}" placeholder="Winner">`:esc(a.winner)}</td><td>${x.year===d.year?`<button class="btn sm danger" data-act="awdel" data-id="${a.id}" data-confirm="1">✕</button>`:""}</td></tr>`)).join("");
   /* records */
-  const docL=docsFor(ui.series),seasonRows=[];
-  docL.forEach(x=>{const mm=agg([x],(a,b)=>b.id);mm.forEach(z=>{if(z.starts>0)seasonRows.push({z,year:x.year,races:x.races.filter(r=>r.done).length})})});
-  const sr=[["Most wins in a season","wins"],["Most poles in a season","poles"],["Most top 5s in a season","t5"],["Most top 10s in a season","t10"],["Most laps led in a season","led"],["Most points in a season","pts"]].map(([n,f])=>{const b=bestOf(seasonRows,x=>x.z[f]>0?x.z[f]:null);return b?`<tr><td>${n}</td><td class="n"><b>${b.v}</b></td><td>${holders(b,x=>x.z.name)}</td><td>${[...new Set(b.items.map(x=>x.year))].join(", ")}</td></tr>`:""}).join("");
+  const ALL=ui.recScope==="all",docL=ALL?Object.values(docs).filter(x=>x&&x.series).sort((a,b)=>a.year-b.year||a.series.localeCompare(b.series)):docsFor(ui.series),seasonRows=[],sx=x=>ALL?" · "+x.name:"";
+  docL.forEach(x=>{const mm=agg([x],(a,b)=>b.id);mm.forEach(z=>{if(z.starts>0)seasonRows.push({z,year:x.year,sname:x.name,races:x.races.filter(r=>r.done).length})})});
+  const sr=[["Most wins in a season","wins"],["Most poles in a season","poles"],["Most top 5s in a season","t5"],["Most top 10s in a season","t10"],["Most laps led in a season","led"],["Most points in a season","pts"]].map(([n,f])=>{const b=bestOf(seasonRows,x=>x.z[f]>0?x.z[f]:null);return b?`<tr><td>${n}</td><td class="n"><b>${b.v}</b></td><td>${holders(b,x=>x.z.name)}</td><td>${[...new Set(b.items.map(x=>x.year+(ALL?" · "+x.sname:"")))].join(", ")}</td></tr>`:""}).join("");
   const bfs=bestOf(seasonRows.filter(x=>x.z.starts>=Math.min(10,x.races||1)),x=>x.z.avgF,true);
-  const srAvg=bfs?`<tr><td>Best average finish in a season</td><td class="n"><b>${fmt(bfs.v)}</b></td><td>${holders(bfs,x=>x.z.name)}</td><td>${[...new Set(bfs.items.map(x=>x.year))].join(", ")}</td></tr>`:"";
+  const srAvg=bfs?`<tr><td>Best average finish in a season</td><td class="n"><b>${fmt(bfs.v)}</b></td><td>${holders(bfs,x=>x.z.name)}</td><td>${[...new Set(bfs.items.map(x=>x.year+(ALL?" · "+x.sname:"")))].join(", ")}</td></tr>`:"";
   const cm=agg(docL,(a,b)=>b.name.trim().toLowerCase()),car=[...cm.values()].filter(x=>x.starts>0);
   const titles=new Map();docL.forEach(x=>{const ch=champOf(x);if(ch&&!ch.live){const k=ch.name.trim().toLowerCase();titles.set(k,(titles.get(k)||0)+1)}});
   car.forEach(x=>x.titles=titles.get(x.name.trim().toLowerCase())||0);
   const cr=[["Most championships","titles"],["Most career wins","wins"],["Most career poles","poles"],["Most career top 5s","t5"],["Most career top 10s","t10"],["Most career starts","starts"],["Most career laps led","led"]].map(([n,f])=>{const b=bestOf(car,x=>x[f]>0?x[f]:null);return b?`<tr><td>${n}</td><td class="n"><b>${b.v}</b></td><td>${holders(b,x=>x.name)}</td><td></td></tr>`:""}).join("");
   const wp=bestOf(car.filter(x=>x.starts>=20),x=>x.winp);const crW=wp&&wp.v>0?`<tr><td>Best win percentage (20+ starts)</td><td class="n"><b>${fmt(wp.v)}%</b></td><td>${holders(wp,x=>x.name)}</td><td></td></tr>`:"";
-  const rr=[];docL.forEach(x=>x.races.forEach(r=>{if(!r.done)return;const nm=new Map(x.drivers.map(z=>[z.id,z]));(r.res||[]).forEach(z=>{const dr=nm.get(z.d);if(dr)rr.push({name:dr.name,year:x.year,race:r.name||r.track,led:z.l||0,gain:z.s>0?z.s-z.f:null,field:r.res.length})})}));
+  const rr=[];docL.forEach(x=>x.races.forEach(r=>{if(!r.done)return;const nm=new Map(x.drivers.map(z=>[z.id,z]));(r.res||[]).forEach(z=>{const dr=nm.get(z.d);if(dr)rr.push({name:dr.name,year:x.year+sx(x),race:r.name||r.track,led:z.l||0,gain:z.s>0?z.s-z.f:null,field:r.res.length})})}));
   const rl=bestOf(rr,x=>x.led>0?x.led:null),rg2=bestOf(rr,x=>x.gain>0?x.gain:null);
-  const bigField=bestOf(docL.flatMap(x=>x.races.filter(r=>r.done).map(r=>({year:x.year,race:r.name||r.track,n:(r.res||[]).length}))),x=>x.n);
+  const bigField=bestOf(docL.flatMap(x=>x.races.filter(r=>r.done).map(r=>({year:x.year+sx(x),race:r.name||r.track,n:(r.res||[]).length}))),x=>x.n);
   const raceRec=[rl?`<tr><td>Most laps led in a race</td><td class="n"><b>${rl.v}</b></td><td>${holders(rl,x=>x.name)}</td><td>${esc(rl.items[0].race)} ${rl.items[0].year}</td></tr>`:"",
     rg2?`<tr><td>Biggest comeback (places gained)</td><td class="n"><b>${rg2.v}</b></td><td>${holders(rg2,x=>x.name)}</td><td>${esc(rg2.items[0].race)} ${rg2.items[0].year}</td></tr>`:"",
     bigField?`<tr><td>Largest field</td><td class="n"><b>${bigField.v}</b></td><td></td><td>${esc(bigField.items[0].race)} ${bigField.items[0].year}</td></tr>`:""].join("");
   /* longest win streak */
-  let streak=null,curS=new Map();
-  docL.forEach(x=>{const nm=new Map(x.drivers.map(z=>[z.id,z]));x.races.forEach(r=>{if(!r.done)return;const w=(r.res||[]).find(z=>z.f===1);const wn=w&&nm.get(w.d)?nm.get(w.d).name.trim().toLowerCase():null;
-    [...curS.keys()].forEach(k=>{if(k!==wn)curS.delete(k)});if(wn){curS.set(wn,(curS.get(wn)||0)+1);if(!streak||curS.get(wn)>streak.n)streak={n:curS.get(wn),name:nm.get(w.d).name,year:x.year}}})});
-  const streakRow=streak&&streak.n>1?`<tr><td>Longest win streak</td><td class="n"><b>${streak.n}</b></td><td>${esc(streak.name)}</td><td>ending ${streak.year}</td></tr>`:"";
+  let streak=null;[...new Set(docL.map(x=>x.series))].forEach(sk=>{const curS=new Map();docL.filter(x=>x.series===sk).forEach(x=>{const nm=new Map(x.drivers.map(z=>[z.id,z]));x.races.forEach(r=>{if(!r.done)return;const w=(r.res||[]).find(z=>z.f===1);const wn=w&&nm.get(w.d)?nm.get(w.d).name.trim().toLowerCase():null;
+    [...curS.keys()].forEach(k=>{if(k!==wn)curS.delete(k)});if(wn){curS.set(wn,(curS.get(wn)||0)+1);if(!streak||curS.get(wn)>streak.n)streak={n:curS.get(wn),name:nm.get(w.d).name,year:x.year,sname:x.name}}})})});
+  const streakRow=streak&&streak.n>1?`<tr><td>Longest win streak</td><td class="n"><b>${streak.n}</b></td><td>${esc(streak.name)}</td><td>ending ${streak.year}${ALL?" · "+esc(streak.sname):""}</td></tr>`:"";
+  const ageRows=[];docL.forEach(x=>{const nm=new Map(x.drivers.map(z=>[z.id,z]));x.races.forEach(r=>{if(!r.done)return;(r.res||[]).forEach(z=>{const dr=nm.get(z.d),a=dr&&dr.age!==""&&dr.age!=null?+dr.age:NaN;if(isNaN(a))return;ageRows.push({name:dr.name,age:a,when:(r.name||r.track||"Race")+" "+x.year+sx(x),f:z.f,s:z.s})})})});
+  const champAges=docL.map(x=>{const ch=champOf(x);if(!ch||ch.live)return null;const dr=x.drivers.find(z=>z.name.trim().toLowerCase()===ch.name.trim().toLowerCase()),a=dr&&dr.age!==""&&dr.age!=null?+dr.age:NaN;return isNaN(a)?null:{name:ch.name,age:a,when:x.year+" season"+sx(x)}}).filter(Boolean);
+  const arow=(label,list,low)=>{const b=bestOf(list,x=>x.age,low);return b?`<tr><td>${label}</td><td class="n"><b>${b.v}</b></td><td>${holders(b,x=>x.name)}</td><td>${esc(b.items[0].when)}</td></tr>`:""};
+  const wins=ageRows.filter(x=>x.f===1),poles=ageRows.filter(x=>x.s===1),t5=ageRows.filter(x=>x.f<=5);
+  const ageRec=[arow("Youngest race winner",wins,true),arow("Oldest race winner",wins,false),arow("Youngest pole winner",poles,true),arow("Oldest pole winner",poles,false),arow("Youngest top 5 finisher",t5,true),arow("Oldest top 5 finisher",t5,false),arow("Youngest champion",champAges,true),arow("Oldest champion",champAges,false),arow("Youngest driver to start a race",ageRows,true),arow("Oldest driver to start a race",ageRows,false)].join("");
   const tbl=(rows)=>rows.trim()?`<div class="card tw"><table><thead><tr><th>Record</th><th class="n">Value</th><th>Holder</th><th>When</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="card empty">Records appear after you enter results.</div>';
   return `<div class="row"><h2>History</h2></div>
     <section class="sect"><h3>Champions</h3><div class="card tw">${ys.length&&champRows.trim()?`<table><thead><tr><th>Year</th>${SERIES.map(([k,n])=>`<th>${esc((docsFor(k).slice(-1)[0]||{}).name||n)}</th>`).join("")}</tr></thead><tbody>${champRows}</tbody></table>`:'<div class="empty">Champions appear after results are entered.</div>'}</div></section>
@@ -815,8 +823,9 @@ function vHistory(d){
       <div class="card tw">${aw.length?`<table><thead><tr><th>Award</th><th>Winner</th><th>Value</th></tr></thead><tbody>${aw.map(a=>`<tr><td><b>${a[0]}</b></td><td>${a[1]}</td><td>${a[2]}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Awards are worked out from this season\'s results.</div>'}</div>
       <div class="row"><h3 style="font-size:17px">Your own awards</h3><span class="sp"></span><button class="btn" data-act="awadd">+ Add award for ${d.year}</button></div>
       ${crow?`<div class="card tw"><table><thead><tr><th>Year</th><th>Award</th><th>Winner</th><th></th></tr></thead><tbody>${crow}</tbody></table></div>`:'<div class="small muted">Add awards the game does not track, like a most popular driver or crew chief of the year. Past years stay listed here.</div>'}</section>
-    <section class="sect"><h3>${esc(d.name)} Records</h3><div class="grid2"><div class="sect"><h3 style="font-size:17px">Single season</h3>${tbl(sr+srAvg)}</div><div class="sect"><h3 style="font-size:17px">Career</h3>${tbl(cr+crW)}</div></div>
-      <div class="sect"><h3 style="font-size:17px">Single race and streaks</h3>${tbl(raceRec+streakRow)}</div></section>`;
+    <section class="sect"><div class="row"><h3>${ALL?"All series":esc(d.name)} Records</h3><span class="sp"></span><div class="seg" role="group" aria-label="Records scope"><button data-act="recScope" data-v="series" class="${ALL?"":"on"}">${esc(d.name)}</button><button data-act="recScope" data-v="all" class="${ALL?"on":""}">All series</button></div></div><div class="grid2"><div class="sect"><h3 style="font-size:17px">Single season</h3>${tbl(sr+srAvg)}</div><div class="sect"><h3 style="font-size:17px">Career</h3>${tbl(cr+crW)}</div></div>
+      <div class="sect"><h3 style="font-size:17px">Single race and streaks</h3>${tbl(raceRec+streakRow)}</div>
+      <div class="sect"><h3 style="font-size:17px">Age</h3>${ageRec.trim()?tbl(ageRec)+'<div class="small muted">Each age is the one set for that driver in that season, so it only covers drivers who have an age.</div>':'<div class="card empty">Set driver ages on the Drivers tab or in a driver profile to see age records.</div>'}</div></section>`;
 }
 
 /* ---------- tracks ---------- */
@@ -890,7 +899,7 @@ function vExhib(d){
   const kseg=`<div class="seg" role="group" aria-label="Filter by event type">${["all",...KINDS].map(k=>`<button data-act="exKind" data-v="${k}" class="${kf===k?"on":""}">${k==="all"?"All":k}${cnt(k)?` ${cnt(k)}`:""}</button>`).join("")}</div>`;
   return `<div class="row"><h2>${esc(d.name)} Exhibitions</h2><span class="sp"></span>
     <select id="exKind" aria-label="Event type">${KINDS.map(k=>`<option>${k}</option>`).join("")}</select><button class="btn" data-act="exadd">+ Add event</button>
-    <button class="btn" data-act="lineup" title="Combine qualifying from two or three sessions and split it into two duel lineups">Duel lineups</button><button class="btn pri" data-act="exPick">Import NR2003 results</button><input type="file" id="exFile" accept=".html,.htm,text/html" multiple hidden>
+    <button class="btn" data-act="dlu" title="Combine two duel results into a race starting lineup">Race lineup</button><button class="btn" data-act="lineup" title="Combine qualifying from two or three sessions and split it into two duel lineups">Duel lineups</button><button class="btn pri" data-act="exPick">Import NR2003 results</button><input type="file" id="exFile" accept=".html,.htm,text/html" multiple hidden>
     ${ev.length?'<button class="btn danger" data-act="exclear" data-confirm="1">Clear exhibitions</button>':""}</div>
     <div class="help">Clashes, duels, all-star races and opens are tracked here and kept out of the points standings and the regular stats.</div>
     <div class="card tw">${ev0.length?`<div class="row" style="padding:10px 12px 0">${kseg}</div>`:""}
@@ -899,12 +908,78 @@ function vExhib(d){
     <div class="card tw">${st.length?`<table><thead><tr><th>Driver</th><th class="n">Starts</th><th class="n">Wins</th>${kc.map(k=>`<th class="n">${k} wins</th>`).join("")}<th class="n">Top 5</th><th class="n">Poles</th><th class="n">Laps led</th><th class="n">Avg fin</th><th class="n">Best</th></tr></thead><tbody>${st.map(s=>`<tr><td class="name"><span class="car">${esc(s.num)}</span> ${esc(s.name)}</td><td class="n">${s.starts}</td><td class="n"><b>${s.wins}</b></td>${kc.map(k=>`<td class="n">${s.k[k]||0}</td>`).join("")}<td class="n">${s.t5}</td><td class="n">${s.poles}</td><td class="n">${s.led}</td><td class="n">${fmt(s.sf/s.starts)}</td><td class="n">${s.best}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Leaders appear after you enter exhibition results.</div>'}</div>`;
 }
 
+async function wdLookup(name){
+  const base="https://www.wikidata.org/w/api.php?format=json&origin=*",j=async u=>{const r=await fetch(u);if(!r.ok)throw new Error("http");return r.json()};
+  const sr=await j(base+"&action=wbsearchentities&language=en&type=item&limit=7&search="+encodeURIComponent(name));
+  const ids=(sr.search||[]).map(x=>x.id);if(!ids.length)return null;
+  const g=await j(base+"&action=wbgetentities&props=claims|descriptions|labels&languages=en&ids="+ids.join("|"));
+  for(const id of ids){const e=(g.entities||{})[id];if(!e)continue;
+    const desc=(e.descriptions&&e.descriptions.en&&e.descriptions.en.value)||"";
+    const c=e.claims&&e.claims.P569&&e.claims.P569[0],bd=c&&c.mainsnak&&c.mainsnak.datavalue&&c.mainsnak.datavalue.value;
+    if(!bd||!/driver|racer|racing|nascar|motorsport/i.test(desc))continue;
+    const m=String(bd.time).match(/^\+?(\d{4})-(\d\d)-(\d\d)/);if(!m)continue;
+    return {label:(e.labels&&e.labels.en&&e.labels.en.value)||name,desc,y:+m[1],mo:+m[2]||6,da:+m[3]||15};}
+  return null;
+}
+function ageRef(){let best="";SERIES.forEach(([k])=>{const dd=docs[docId(k,ui.year)];if(dd)dd.races.forEach(r=>{if(r.date&&(!best||r.date<best))best=r.date})});
+  const m=best.match(/^(\d{4})-(\d\d)-(\d\d)/);return m?{y:+m[1],mo:+m[2],da:+m[3],txt:best}:{y:ui.year,mo:2,da:15,txt:ui.year+"-02-15"}}
+function ageOn(b,ref){let a=ref.y-b.y;if(ref.mo<b.mo||(ref.mo===b.mo&&ref.da<b.da))a--;return a}
+function modalAges(){
+  const m=ui.modal,n=m.rows.filter(r=>r.use).length;
+  return `<div class="dlg" role="dialog" aria-label="Look up ages" data-s="${ui.series}" style="max-width:760px"><header><h3>Look up real ages</h3><span class="muted">${ui.year} season</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body" style="display:flex;flex-direction:column;gap:12px">
+    <div class="help">Searches Wikidata for each driver's birth date and works out their age on ${esc(m.ref.txt)}${m.ref.txt.endsWith("-02-15")?"":", the first race of the season"}. Check each match before applying, since drivers made up for your sim or with common names can match the wrong person.</div>
+    ${m.status==="running"?`<div class="muted">Looking up ${m.done} of ${m.total}…</div>`:""}
+    ${m.status==="error"?`<div class="empty">Couldn't reach Wikidata from here. This page may block outside connections. The standalone tracker on your own site usually can.</div>`:""}
+    ${m.rows.length?`<div class="card tw" style="max-height:420px;overflow:auto"><table><thead><tr><th></th><th>Driver</th><th>Found</th><th class="n">Born</th><th class="n">Age</th><th class="n">Now</th></tr></thead><tbody>${m.rows.map((r,i)=>`<tr class="${r.use?"":"dim"}"><td><input type="checkbox" data-agu="${i}" ${r.use?"checked":""} aria-label="Use age for ${esc(r.name)}"></td><td>${esc(r.name)}</td><td>${esc(r.label)}<div class="small muted">${esc(r.desc)}</div></td><td class="n">${r.y}-${String(r.mo).padStart(2,"0")}-${String(r.da).padStart(2,"0")}</td><td class="n"><b>${r.age}</b></td><td class="n">${r.cur===""?"–":esc(r.cur)}</td></tr>`).join("")}</tbody></table></div>`:""}
+    ${m.status==="done"?`<div class="small muted">${m.rows.length} found${m.miss.length?`. Not found: ${esc(m.miss.join(", "))}`:""}</div>`:""}
+  </div>
+  <footer><span class="small muted">Existing ages are only replaced if you leave them checked.</span><span class="sp"></span><button class="btn pri" data-act="ageApply" ${n?"":"disabled"}>Apply ${n} age${n===1?"":"s"}</button></footer></div>`;
+}
+async function ageRun(m){
+  const names=new Map();
+  SERIES.forEach(([k])=>{const dd=docs[docId(k,ui.year)];if(dd)dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(key&&!names.has(key))names.set(key,{name:x.name.trim(),cur:x.age==null?"":x.age})})});
+  const list=[...names.values()];m.total=list.length;m.done=0;m.status="running";m.rows=[];m.miss=[];renderModal();
+  let q=0,fail=0;
+  const work=async()=>{while(q<list.length&&ui.modal===m){const it=list[q++];
+    try{const f=await wdLookup(it.name);if(f){const age=ageOn(f,m.ref);m.rows.push(Object.assign({name:it.name,cur:it.cur,age},f,{use:it.cur===""}))}else m.miss.push(it.name)}
+    catch(e){fail++;if(fail>=3&&!m.rows.length){q=list.length}}
+    m.done++;if(m.done%3===0||m.done===m.total)if(ui.modal===m)renderModal()}};
+  await Promise.all([work(),work(),work()]);
+  if(ui.modal!==m)return;
+  m.rows.sort((a,b)=>a.name.localeCompare(b.name));
+  m.status=fail&&!m.rows.length?"error":"done";renderModal();
+}
+function vDrivers(d0){
+  const f=ui.filter.toLowerCase(),by=new Map();
+  SERIES.forEach(([k,n0])=>{const dd=docs[docId(k,ui.year)];if(!dd)return;
+    dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(!key)return;let e=by.get(key);if(!e){e={name:x.name,age:"",ent:[]};by.set(key,e)}
+      if(e.age===""&&x.age!==""&&x.age!=null)e.age=x.age;
+      e.ent.push({s:k,sn:dd.name||n0,id:x.id,num:x.num,team:x.team,make:x.make})})});
+  let list=[...by.values()].filter(e=>!f||(e.name+" "+e.ent.map(z=>z.num+" "+z.team+" "+z.sn).join(" ")).toLowerCase().includes(f));
+  const c=ui.drvSort||"name",dir=ui.drvDir||1,first=(e,fld)=>String((e.ent[0]||{})[fld]||"");
+  list.sort((a,b)=>{let r;
+    if(c==="age")r=(a.age===""?999:+a.age)-(b.age===""?999:+b.age);
+    else if(c==="num")r=num(first(a,"num"))-num(first(b,"num"));
+    else if(c==="team")r=first(a,"team").localeCompare(first(b,"team"),undefined,{sensitivity:"base"});
+    else if(c==="series")r=first(a,"sn").localeCompare(first(b,"sn"));
+    else r=a.name.localeCompare(b.name);
+    return r*dir||a.name.localeCompare(b.name)});
+  const head=[["name","Driver"],["age","Age"],["num","#"],["team","Team"],["series","Series"]].map(([k,n])=>`<th class="s ${c===k?"on":""}" data-act="sortDrvs" data-v="${k}">${n}${c===k?(dir>0?" ▲":" ▼"):""}</th>`).join("");
+  const rows=list.map(e=>{const one=z=>e.ent.map(z).join("");
+    return `<tr><td class="name"><a href="#" data-act="drvAt" data-s="${e.ent[0].s}" data-id="${e.ent[0].id}">${esc(e.name)}</a></td><td class="n">${e.age===""?'<span class="muted">–</span>':esc(e.age)}</td>
+    <td>${one(z=>`<div><span class="car">${esc(z.num)}</span></div>`)}</td><td>${one(z=>`<div>${esc(z.team)||'<span class="muted">–</span>'}</div>`)}</td><td>${one(z=>`<div><a href="#" data-act="series-view" data-v="${z.s}" data-w="roster">${esc(z.sn)}</a></div>`)}</td></tr>`}).join("");
+  return `<div class="row"><h2>Drivers · ${ui.year} · ${list.length}</h2><span class="sp"></span><input type="text" id="filter" placeholder="Filter by name, team, #, series" value="${esc(ui.filter)}" style="width:240px"><button class="btn" data-act="ageLookup" title="Find real drivers' birth dates and fill in their ages for this season">Look up real ages</button></div>
+    <div class="help">Every driver in all series for ${ui.year}. A driver who runs in more than one series is listed once with each number, team and series. Open a driver to edit their age.</div>
+    <div class="card tw">${list.length?`<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No drivers yet.</div>'}</div>`;
+}
 function vRoster(d){
   const f=ui.filter.toLowerCase();
   const list=d.drivers.filter(x=>!f||(x.name+" "+x.team+" "+x.num+" "+x.make).toLowerCase().includes(f));
-  if(ui.rosSort){const c=ui.rosSort,dir=ui.rosDir;list.sort((a,b)=>{let r;if(c==="num")r=num(a.num)-num(b.num)||String(a.num).localeCompare(String(b.num));else if(c==="pf"||c==="rookie")r=(a[c]?1:0)-(b[c]?1:0);else r=String(a[c]||"").localeCompare(String(b[c]||""),undefined,{sensitivity:"base"});return r*dir||a.name.localeCompare(b.name)})}
+  if(ui.rosSort){const c=ui.rosSort,dir=ui.rosDir;list.sort((a,b)=>{let r;if(c==="num")r=num(a.num)-num(b.num)||String(a.num).localeCompare(String(b.num));else if(c==="age")r=(a.age===""||a.age==null?999:+a.age)-(b.age===""||b.age==null?999:+b.age);else if(c==="pf"||c==="rookie")r=(a[c]?1:0)-(b[c]?1:0);else r=String(a[c]||"").localeCompare(String(b[c]||""),undefined,{sensitivity:"base"});return r*dir||a.name.localeCompare(b.name)})}
   const rows=list.map(x=>`<tr><td><input type="text" class="w-s" data-ed="drv" data-id="${x.id}" data-k="num" value="${esc(x.num)}" aria-label="Car number"></td>
     <td><input type="text" class="w-l" data-ed="drv" data-id="${x.id}" data-k="name" value="${esc(x.name)}" aria-label="Driver name"></td>
+    <td><input type="number" class="w-s" min="0" max="120" data-ed="drv" data-id="${x.id}" data-k="age" value="${esc(x.age==null?"":x.age)}" aria-label="Age"></td>
     <td><input type="text" class="w-l" data-ed="drv" data-id="${x.id}" data-k="team" value="${esc(x.team)}" aria-label="Team"></td>
     <td><input type="text" class="w-m" list="makes" data-ed="drv" data-id="${x.id}" data-k="make" value="${esc(x.make)}" aria-label="Make"></td>
     <td><input type="text" class="w-l" data-ed="drv" data-id="${x.id}" data-k="sponsor" value="${esc(x.sponsor)}" aria-label="Sponsor"></td>
@@ -915,7 +990,7 @@ function vRoster(d){
     <input type="text" id="filter" placeholder="Filter by name, team, #" value="${esc(ui.filter)}" style="width:210px">
     ${d.drivers.length?`<button class="btn danger" data-act="clearRoster" data-confirm="1" title="Removes every driver. Race results are removed too, since they belong to those drivers.">${d.races.some(r=>r.done)?"Clear roster and results":"Clear roster"}</button>`:""}<button class="btn" data-act="adddrv">+ Add driver</button><button class="btn pri" data-act="carPick">Import .car files</button><input type="file" id="carFile" accept=".car" multiple hidden></div>
     ${emptyHint(d)}<datalist id="makes">${MAKES.map(m=>`<option>${m}</option>`).join("")}</datalist>
-    <div class="card tw">${list.length?`<table><thead><tr>${[["num","#"],["name","Driver"],["team","Team"],["make","Make"],["sponsor","Sponsor"],["pf","Points"],["rookie","Rookie"]].map(([c,n])=>`<th class="s ${ui.rosSort===c?"on":""}" data-act="sortRos" data-v="${c}" ${c==="pf"?'title="Counts in the driver standings"':""}>${n}${ui.rosSort===c?(ui.rosDir>0?" ▲":" ▼"):""}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No drivers yet.</div>'}</div>
+    <div class="card tw">${list.length?`<table><thead><tr>${[["num","#"],["name","Driver"],["age","Age"],["team","Team"],["make","Make"],["sponsor","Sponsor"],["pf","Points"],["rookie","Rookie"]].map(([c,n])=>`<th class="s ${ui.rosSort===c?"on":""}" data-act="sortRos" data-v="${c}" ${c==="pf"?'title="Counts in the driver standings"':""}>${n}${ui.rosSort===c?(ui.rosDir>0?" ▲":" ▼"):""}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No drivers yet.</div>'}</div>
     <p class="small muted">“Points” marks drivers who are running for the championship. Part-timers can stay unchecked and still get results and stats. Edits save automatically.</p>`;
 }
 
@@ -941,11 +1016,17 @@ function vRatings(d){
     <p class="small muted">Each rating is the in-game minimum and maximum on the 0–100 scale. Cell color follows the middle of the range, from red at 50 or below through yellow to green at 100. Each tab shows the average for its own type, and All shows all three. The averages and the roster average row use the middle of each range.</p>`;
 }
 /* ---------- rating suggestions ---------- */
-const SG=[["ov","Overall","every driver rating"],["qua","Qualifying","Qualifying"],["fin","Finishing","Finishing"],["con","Consistency","Consistency"]];
+const SG=[["ov","Overall","every driver rating"],["ag","Age","every driver rating"],["qua","Qualifying","Qualifying"],["fin","Finishing","Finishing"],["con","Consistency","Consistency"]];
 function pctRank(vals,v){ // 0..1, higher value = higher rank
   if(vals.length<2)return .5;let below=0,eq=0;vals.forEach(o=>{if(o<v)below++;else if(o===v)eq++});return (below+(eq-1)/2)/(vals.length-1);
 }
-function suggestions(d,scale,minS){
+function ageTrend(age,scale){ // development for the young, decline for the old; 0 at the peak (27 to 33)
+  const a=age===""||age==null||isNaN(age)?null:+age;if(a==null)return 0;
+  const raw=a<27?Math.min(3,(27-a)*.5):a>33?-Math.min(4,(a-33)*.5):0;
+  return Math.round(raw*scale/4);
+}
+function suggestions(d,scale,minS,useAge){
+  if(useAge===undefined)useAge=true;
   const m=agg([d],(dd,x)=>x.id);
   const el=[...m.values()].filter(z=>z.starts>=minS&&z.avgF!=null&&avgRate(drvOf(d,z.id),"d")!=null);
   if(el.length<3)return [];
@@ -960,8 +1041,8 @@ function suggestions(d,scale,minS){
       if(pp==null)return 0;return ((pp-rp)-gOv)*scale*.5*sh};
     const h=v=>Math.round(v);
     return {id:z.id,x,starts:z.starts,avgF:z.avgF,avgS:z.avgS,wins:z.wins,rating:avgRate(x,"d"),
-      ov:h(gOv*scale*sh),qua:h(trait("qua",o=>o.avgS!=null?-o.avgS:null)),fin:h(trait("fin",gain)),con:h(trait("con",o=>-dnfR(o)))};
-  }).sort((a,b)=>(b.ov+b.qua+b.fin+b.con)-(a.ov+a.qua+a.fin+a.con));
+      ag:useAge?ageTrend(x.age,scale):0,ov:h(gOv*scale*sh),qua:h(trait("qua",o=>o.avgS!=null?-o.avgS:null)),fin:h(trait("fin",gain)),con:h(trait("con",o=>-dnfR(o)))};
+  }).sort((a,b)=>(b.ov+b.ag+b.qua+b.fin+b.con)-(a.ov+a.ag+a.qua+a.fin+a.con));
 }
 const sgVal=(r,k,mo)=>{const v=mo.adj&&mo.adj[r.id+":"+k];return v!=null?v:r[k]};
 const sgSign=v=>v>0?"+"+v:String(v);
@@ -1260,23 +1341,45 @@ function modalLineup(){
   </div>
   <footer><span class="small muted">Creates two Duel events under Exhibitions, each with its starting lineup on its Qualifying tab.</span><span class="sp"></span><button class="btn" data-act="lnCopy" ${m.files.length?"":"disabled"}>Copy as text</button><button class="btn pri" data-act="lnMake" ${m.files.length?"":"disabled"}>Create duel events</button></footer></div>`;
 }
+function dluBuild(d,m){
+  const A=(d.exh||[]).find(e=>e.id===m.a),B=(d.exh||[]).find(e=>e.id===m.b),E1=m.swap?B:A,E2=m.swap?A:B;
+  const fin=e=>e?(e.res||[]).slice().sort((x,y)=>x.f-y.f).map(x=>x.d):[];
+  const f1=fin(E1),f2=fin(E2),seen=new Set(),rows=[];
+  [A,B].forEach(e=>e&&(e.lk||[]).slice().sort((x,y)=>x.p-y.p).forEach(x=>{if(!seen.has(x.d)){seen.add(x.d);rows.push({d:x.d,src:"Locked in",t:x.t||""})}}));
+  const tOf=(e,id)=>{const q=e&&(e.qual||[]).find(z=>z.d===id);return q&&q.t?q.t:""};
+  for(let i=0;i<Math.max(f1.length,f2.length);i++)[[f1,E1],[f2,E2]].forEach(([l,e])=>{const id=l[i];if(id&&!seen.has(id)){seen.add(id);rows.push({d:id,src:((e&&e.name)||"Duel")+" · "+ord(i+1),t:tOf(e,id)})}});
+  return rows;
+}
+function modalDlu(){
+  const d=cur(),m=ui.modal,ds=(d.exh||[]).filter(e=>e.kind==="Duel"&&(e.res||[]).length),rows=m.a&&m.b?dluBuild(d,m):[];
+  const opt=(sel)=>ds.map(e=>`<option value="${e.id}" ${e.id===sel?"selected":""}>${esc(e.name)||"Duel"}</option>`).join("");
+  return `<div class="dlg" role="dialog" aria-label="Race lineup from duels" data-s="${ui.series}" style="max-width:640px"><header><h3>Race lineup from duels</h3><span class="muted">${esc(d.name)} · ${d.year}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body" style="display:flex;flex-direction:column;gap:14px">${ds.length<2?'<div class="empty">You need two Duel events with results first. Add them under Exhibitions with the type Duel.</div>':`
+    <div class="fields"><label class="fld">First duel<select data-dlp="a">${opt(m.a)}</select></label><label class="fld">Second duel<select data-dlp="b">${opt(m.b)}</select></label>
+      <label class="fld">Race<select data-dlp="race"><option value="">Choose a race…</option>${d.races.map((r,i)=>`<option value="${r.id}" ${m.race===r.id?"selected":""}>${i+1}. ${esc(r.name)||"Unnamed race"}</option>`).join("")}</select></label>
+      <label class="fld">Who gets the inside spots<select data-dlp="swap"><option value="0" ${m.swap?"":"selected"}>First duel</option><option value="1" ${m.swap?"selected":""}>Second duel</option></select></label></div>
+    <div class="small muted">Drivers who were locked in when the duels were created start first. After them, the finishing orders of the two duels alternate: each duel's winner, then each duel's second place, and so on.</div>
+    <div class="card tw" style="max-height:340px;overflow:auto"><table><thead><tr><th class="n">Start</th><th>Driver</th><th class="n">Time</th><th>From</th></tr></thead><tbody>${rows.map((x,i)=>{const dr=drvOf(d,x.d);return `<tr><td class="n">${i+1}</td><td>${dr?carTag(dr):""}</td><td class="n">${esc(x.t||"")}</td><td class="muted">${esc(x.src)}</td></tr>`}).join("")}</tbody></table></div>`}</div>
+  <footer><span class="small muted">This replaces the qualifying order saved for that race.</span><span class="sp"></span><button class="btn pri" data-act="dluApply" ${ds.length>1&&m.race&&rows.length?"":"disabled"}>Use as starting lineup</button></footer></div>`;
+}
 function modalSugg(){
   const d=cur(),mo=ui.modal,done=d.races.filter(r=>r.done).length;
   const minS=mo.min!=null?mo.min:Math.max(3,Math.ceil(done*.25));
-  const rows=suggestions(d,mo.scale,minS),ys=years();
+  const rows=suggestions(d,mo.scale,minS,mo.age!==false),ys=years();
   const tgt=docs[docId(d.series,mo.target)]||d;
   const body=rows.map(r=>{
     const on=!(mo.off&&mo.off[r.id]);
     const tot=SG.reduce((a,[k])=>a+(k==="ov"?0:0),0);
-    return `<tr class="${on?"":"dim"}"><td><input type="checkbox" data-sgsel="${r.id}" ${on?"checked":""} aria-label="Apply to ${esc(r.x.name)}"></td><td class="name"><span class="car">${esc(r.x.num)}</span> ${esc(r.x.name)}</td>
+    return `<tr class="${on?"":"dim"}"><td><input type="checkbox" data-sgsel="${r.id}" ${on?"checked":""} aria-label="Apply to ${esc(r.x.name)}"></td><td class="name"><span class="car">${esc(r.x.num)}</span> ${esc(r.x.name)}${r.x.age!==""&&r.x.age!=null?` <span class="muted small">age ${esc(r.x.age)}</span>`:""}</td>
     <td class="n">${r.starts}</td><td class="n">${fmt(r.avgF)}</td><td class="n">${r.wins}</td><td class="n" style="background:${heat(r.rating)}">${f1(r.rating)}</td>
     ${SG.map(([k])=>{const v=sgVal(r,k,mo);return `<td><input type="number" step="1" class="w-s sg ${v>0?"up":v<0?"dn":""}" data-sg="${k}" data-id="${r.id}" value="${v}" aria-label="${k} change for ${esc(r.x.name)}"></td>`}).join("")}</tr>`}).join("");
   return `<div class="dlg" role="dialog" aria-label="Suggested rating changes" data-s="${ui.series}"><header><h3>Suggested rating changes</h3><span class="muted">${esc(d.name)} · based on ${d.year} results</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body" style="display:flex;flex-direction:column;gap:12px">
     <div class="fields"><label class="fld">Biggest swing<input type="number" step="0.5" min="1" max="15" data-sgp="scale" value="${mo.scale}"></label>
       <label class="fld">Minimum starts<input type="number" min="1" data-sgp="min" value="${minS}"></label>
+      <label class="row small" style="align-self:flex-end;gap:6px"><input type="checkbox" class="chk" data-sgp="age" ${mo.age!==false?"checked":""}> Consider age</label>
       <label class="fld">Apply to season<select data-sgp="target">${ys.map(y=>`<option value="${y}" ${y===mo.target?"selected":""}>${y}${y===d.year?" (this season)":""}</option>`).join("")}</select></label></div>
-    <div class="help">Each driver is compared with the rest of the field. A driver who finishes better than their average driver rating suggests gets a raise, and one who finishes worse gets a cut. <b>Overall</b> moves every driver rating. The other columns are extra changes to that one rating, based on average start (Qualifying), places gained from start to finish (Finishing), and how often the driver fails to finish (Consistency). Drivers with few starts are pulled toward no change. Edit any number before applying.</div>
+    <div class="help">Each driver is compared with the rest of the field. A driver who finishes better than their average driver rating suggests gets a raise, and one who finishes worse gets a cut. <b>Overall</b> moves every driver rating. The other columns are extra changes to that one rating, based on average start (Qualifying), places gained from start to finish (Finishing), and how often the driver fails to finish (Consistency). Drivers with few starts are pulled toward no change. With <b>Consider age</b> on, drivers who have an age set also get an <b>Age</b> change to every driver rating: younger drivers improve as they develop (up to +3 at the default swing, for a driver of 21 or younger), drivers in their prime (27 to 33) stay put, and older drivers decline (down to -4 at 41 or older). It scales with the biggest swing. Drivers with no age are not affected. Edit any number before applying.</div>
     <div class="card tw">${rows.length?`<table><thead><tr><th></th><th>Driver</th><th class="n">Starts</th><th class="n">Avg fin</th><th class="n">Wins</th><th class="n">Rating</th>${SG.map(([k,n])=>`<th>${n}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`:`<div class="empty">Not enough results yet. At least three drivers need ${minS} or more starts, and each needs driver ratings.</div>`}</div></div>
   <footer><span class="small muted">Changes go to drivers matched by name in ${mo.target}${tgt===d?", the season you are viewing":""}. Ratings stay between 0 and 100.</span><span class="sp"></span><button class="btn pri" data-act="sgApply" data-confirm="1" ${rows.length?"":"disabled"}>Apply selected</button></footer></div>`;
 }
@@ -1296,7 +1399,11 @@ function vSetup(d){
     <div class="sect"><h3 style="font-size:17px">Stages</h3>
       <label class="row" style="gap:8px"><input type="checkbox" class="chk" data-ed="stg" data-k="on" ${stg(d).on?"checked":""}> <span>Score stage racing</span></label>
       ${stg(d).on?`<div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding-top:10px"><div class="row"><label class="fld">Stages per race<input type="number" min="1" max="8" data-ed="stg" data-k="count" value="${stg(d).count}"></label><label class="fld">Playoff pts per stage win<input type="number" min="0" data-ed="stg" data-k="pp" value="${(d.settings.stages||{}).pp||0}"></label><div><b>Stage points</b><div class="small muted">${esc(tableSummary(stg(d).pts))}</div></div></div><button class="btn" data-act="ptsEdit" data-k="stagePts">Choose positions and points…</button></div>
-      <div class="small muted">Stage points are added to each driver's race points. Playoff points are counted from regular season wins (the win bonus under the Chase or playoff settings) plus the stage win value above, and show in standings and stats. With a Chase that has no seeding list, they are added to the reset total. Enter stage finishing orders on the Stages tab of a race's results. Each race can have a different number of stages.</div>`:""}</div>
+      <div class="small muted">Stage points are added to each driver's race points. Playoff points are counted for every win, in the regular season and the playoffs (the points per win under the Chase or playoff settings), plus the stage win value above. They show in standings and stats but never add to championship points. Enter stage finishing orders on the Stages tab of a race's results. Each race can have a different number of stages.</div>`:""}</div>
+    <div class="sect"><h3 style="font-size:17px">Duel points</h3>
+      <label class="row" style="gap:8px"><input type="checkbox" class="chk" data-ed="duel" data-k="on" ${duelPts(d).on?"checked":""}> <span>Give points for finishing in each duel</span></label>
+      ${duelPts(d).on?`<div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding-top:10px"><div><b>Duel points</b><div class="small muted">${esc(tableSummary(duelPts(d).pts))}</div></div><button class="btn" data-act="ptsEdit" data-k="duelPts">Choose positions and points…</button></div>
+      <div class="small muted">Applies to Exhibitions of the type Duel once they have results. The points are added to the regular season standings and stats.</div>`:""}</div>
     <label class="fld">Postseason format<select data-ed="postfmt" style="width:240px"><option value="none">None</option><option value="chase" ${ch.on?"selected":""}>Chase (cutoff and points reset)</option><option value="playoff" ${PO(d).on?"selected":""}>Elimination playoffs</option></select></label>
     ${ch.on?`<div class="fields">
       <label class="fld">After race #<input type="number" data-ed="chase" data-k="after" value="${ch.after}"></label>
@@ -1304,17 +1411,17 @@ function vSetup(d){
       <label class="fld">Or within (pts)<input type="number" data-ed="chase" data-k="within" value="${ch.within}"></label>
       <label class="row" style="gap:8px;align-self:flex-end"><input type="checkbox" class="chk" data-ed="chase" data-k="winAdv" ${ch.winAdv?"checked":""}> <span>Race winners advance</span></label>
       <label class="fld">Seeding points, 1st to last<input type="text" data-ed="chasestr" data-k="seeds" value="${esc(ch.seeds||"")}" style="width:min(420px,100%)"></label>
-      <label class="fld">Win bonus<input type="number" data-ed="chase" data-k="win" value="${ch.win}"></label>
+      <label class="fld">Playoff pts per win<input type="number" data-ed="chase" data-k="win" value="${ch.win}"></label>
       <label class="fld">Reset to<input type="number" data-ed="chase" data-k="base" value="${ch.base}"></label></div>
-    <div class="small muted">After race ${ch.after}, the top ${ch.size}${ch.within>0?", plus anyone within "+ch.within+" points,":""} reset once to the seeding points listed, best driver first, then race the remaining races with no eliminations. The most points at the end wins the title. With "Race winners advance" on, a regular season winner is guaranteed a spot even outside the top ${ch.size}, and the rest of the spots go to the highest in points. If you clear the seeding list, everyone resets to the "Reset to" number plus the win bonus per regular season win.</div>`:""}
+    <div class="small muted">After race ${ch.after}, the top ${ch.size}${ch.within>0?", plus anyone within "+ch.within+" points,":""} reset once to the seeding points listed, best driver first, then race the remaining races with no eliminations. The most points at the end wins the title. With "Race winners advance" on, a regular season winner is guaranteed a spot even outside the top ${ch.size}, and the rest of the spots go to the highest in points. If you clear the seeding list, everyone resets to the "Reset to" number.</div>`:""}
     ${PO(d).on?`<div class="fields">
       <label class="fld">Regular season races<input type="number" data-ed="po" data-k="after" value="${PO(d).after}"></label>
       <label class="fld">Field, then each cut<input type="text" data-ed="po" data-k="sizes" value="${esc(PO(d).sizes)}" style="width:130px"></label>
       <label class="fld">Races per round<input type="text" data-ed="po" data-k="races" value="${esc(PO(d).races)}" style="width:110px"></label>
       <label class="fld">Points reset each round<input type="text" data-ed="po" data-k="resets" value="${esc(PO(d).resets)}" style="width:170px"></label>
-      <label class="fld">Playoff pts per win<input type="number" data-ed="po" data-k="win" value="${PO(d).win}"></label>
-      <label class="row small"><input type="checkbox" class="chk" data-ed="po" data-k="winAdv" ${PO(d).winAdv?"checked":""}> A win advances automatically</label></div>
-    <div class="small muted">Defaults are a 16-driver field cut to 12, 8 and 4, with three races in each of the first three rounds and one championship race. Race winners get in first, then the rest are filled by points. Each round resets everyone to the number listed, plus the playoff points they carry from wins. In the final race the best finisher of the four wins the title.</div>`:""}
+      <label class="row small"><input type="checkbox" class="chk" data-ed="po" data-k="winAdv" ${PO(d).winAdv?"checked":""}> A win advances automatically</label>
+      <label class="fld">Playoff pts per win<input type="number" data-ed="po" data-k="win" value="${PO(d).win}"></label></div>
+    <div class="small muted">Defaults are a 16-driver field cut to 12, 8 and 4, with three races in each of the first three rounds and one championship race. Race winners get in first, then the rest are filled by points. Each round resets everyone to the number listed. Playoff points are a stat only. They never add to championship points. In the final race the best finisher of the four wins the title.</div>`:""}
   </section>
   <section class="card pad sect" id="seriesSec"><h3>Series</h3>
     <div class="small muted">Every season keeps the same set of series. Adding a series creates it in every season you have. Importing a results file puts it in the series you have open, unless the file name has NCS, NBS or NTS in it.</div>
@@ -1385,24 +1492,25 @@ function modalRace(){
   <div ${tab==="qual"?"":"hidden"}>${qualPane(d,ui.modal)}</div>${!ex&&stg(d).on?`<div ${tab==="stg"?"":"hidden"}>${stagePane(d,ui.modal)}</div>`:""}</div>
   <footer>${tab==="qual"?'<button class="btn" data-act="qAdd">+ Add row</button>':tab==="stg"?"":'<button class="btn" data-act="mAdd">+ Add row</button>'}<span class="sp"></span>${r.done?'<button class="btn danger" data-act="mClear" data-confirm="1">Clear results</button>':""}<button class="btn pri" data-act="mSave">Save results</button></footer></div>`;
 }
+const logSeg=()=>`<div class="seg" role="group" aria-label="Race log filter"><button data-act="logFilter" data-v="all" class="${ui.logWins?"":"on"}">All races</button><button data-act="logFilter" data-v="wins" class="${ui.logWins?"on":""}">Wins only</button></div>`;
 function modalDriver(){
   const d=cur(),dr=drvOf(d,ui.modal.id);if(!dr)return "";
   const s=agg([d],(a,b)=>b.id).get(dr.id);
   const pm=new Map();d.races.forEach(r=>{if(r.done)pm.set(r.id,racePoints(d,r))});
-  const log=d.races.map((r,i)=>{const x=(r.res||[]).find(z=>z.d===dr.id);return x?`<tr><td class="n">${i+1}</td><td><a href="#" data-act="race" data-id="${r.id}" data-from="${dr.id}">${esc(r.name)||"Unnamed race"}</a></td><td>${esc(r.track)}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td><td class="n">${pm.get(r.id).get(dr.id)}</td></tr>`:""}).join("");
+  const log=d.races.map((r,i)=>{const x=(r.res||[]).find(z=>z.d===dr.id);return x&&(!ui.logWins||x.f===1)?`<tr><td class="n">${i+1}</td><td><a href="#" data-act="race" data-id="${r.id}" data-from="${dr.id}">${esc(r.name)||"Unnamed race"}</a></td><td>${esc(r.track)}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td><td class="n">${pm.get(r.id).get(dr.id)}</td></tr>`:""}).join("");
   const yrs=docsFor(ui.series).map(dd=>{const dx=dd.drivers.find(z=>z.name.trim().toLowerCase()===dr.name.trim().toLowerCase());if(!dx)return "";const z=agg([dd],(a,b)=>b.id).get(dx.id);
-    const ar=avgRate(dx,"d");return `<tr><td>${dd.year}</td><td class="n"><span class="car">${esc(dx.num)}</span></td><td>${esc(dx.team)}</td><td class="n">${z.starts}</td><td class="n">${z.wins}</td><td class="n">${z.poles}</td><td class="n">${z.t5}</td><td class="n">${z.t10}</td><td class="n">${z.led}</td><td class="n">${z.avgF!=null?fmt(z.avgF):"–"}</td><td class="n">${z.pts}</td><td class="n">${ar==null?"–":f1(ar)}</td></tr>`}).join("");
+    const ar=avgRate(dx,"d");return `<tr><td>${dd.year}</td><td class="n"><span class="car">${esc(dx.num)}</span></td><td class="n">${dx.age===""||dx.age==null?"–":esc(dx.age)}</td><td>${esc(dx.team)}</td><td class="n">${z.starts}</td><td class="n">${z.wins}</td><td class="n">${z.poles}</td><td class="n">${z.t5}</td><td class="n">${z.t10}</td><td class="n">${z.led}</td><td class="n">${z.avgF!=null?fmt(z.avgF):"–"}</td><td class="n">${z.pts}</td><td class="n">${ar==null?"–":f1(ar)}</td></tr>`}).join("");
   return `<div class="dlg" role="dialog" aria-label="Driver card" data-s="${ui.series}"><header><span class="car" style="font-size:22px">${esc(dr.num)}</span><h3>${esc(dr.name)}</h3><span class="muted">${esc(dr.team)} ${dr.make?"· "+esc(dr.make):""}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body"><div class="grid2"><div><h3>Driver ratings <span class="muted" style="font-size:15px">avg ${avgRate(dr,"d")==null?"–":f1(avgRate(dr,"d"))}</span></h3>${RATE.filter(r=>r[2]==="d").map(([c,n])=>{const v=rg(dr,c);return `<div class="rt"><span>${n}</span><i><b style="margin-left:${v?v.a:0}%;width:${v?Math.max(v.b-v.a,1):0}%"></b></i><span class="n">${rtxt(v)}</span></div>`}).join("")}</div>
-  <div><h3>${d.year} season</h3><dl class="kv" style="margin-top:6px"><dt>Points</dt><dd><b>${s.pts}</b></dd><dt>Starts</dt><dd>${s.starts}</dd><dt>Wins / Poles</dt><dd>${s.wins} / ${s.poles}</dd><dt>Top 5 / Top 10</dt><dd>${s.t5} / ${s.t10}</dd><dt>Laps led</dt><dd>${s.led}</dd><dt>Avg start / finish</dt><dd>${s.avgS!=null?fmt(s.avgS):"–"} / ${s.avgF!=null?fmt(s.avgF):"–"}</dd><dt>DNFs</dt><dd>${s.dnf}</dd></dl></div></div>
-  <h3 style="margin-top:16px">By season</h3><div class="tw"><table><thead><tr><th>Year</th><th class=n>#</th><th>Team</th><th class=n>Starts</th><th class=n>Wins</th><th class=n>Poles</th><th class=n>T5</th><th class=n>T10</th><th class=n>Led</th><th class=n>Avg fin</th><th class=n>Pts</th><th class=n>Avg rating</th></tr></thead><tbody>${yrs}</tbody></table></div>
-  ${(()=>{const xs=(d.exh||[]).map(ev=>{const x=(ev.res||[]).find(z=>z.d===dr.id);return x?`<tr><td><a href="#" data-act="exrace" data-id="${ev.id}" data-from="${dr.id}">${esc(ev.name)||"Event"}</a></td><td>${esc(ev.kind||"")}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td></tr>`:""}).join("");return xs?`<h3 style="margin-top:16px">${d.year} exhibitions</h3><div class="tw"><table><thead><tr><th>Event</th><th>Type</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th></tr></thead><tbody>${xs}</tbody></table></div>`:""})()}
-  <h3 style="margin-top:16px">${d.year} race log</h3>${log?`<div class="tw"><table><thead><tr><th class=n>#</th><th>Race</th><th>Track</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th><th class=n>Pts</th></tr></thead><tbody>${log}</tbody></table></div>`:'<p class="muted">No results yet this season.</p>'}</div></div>`;
+  <div><h3>${d.year} season</h3><dl class="kv" style="margin-top:6px"><dt>Age</dt><dd><input type="number" class="w-s" min="0" max="120" data-ed="drv" data-id="${dr.id}" data-k="age" value="${esc(dr.age==null?"":dr.age)}" aria-label="Age" placeholder="–"></dd><dt>Points</dt><dd><b>${s.pts}</b></dd><dt>Starts</dt><dd>${s.starts}</dd><dt>Wins / Poles</dt><dd>${s.wins} / ${s.poles}</dd><dt>Top 5 / Top 10</dt><dd>${s.t5} / ${s.t10}</dd><dt>Laps led</dt><dd>${s.led}</dd><dt>Avg start / finish</dt><dd>${s.avgS!=null?fmt(s.avgS):"–"} / ${s.avgF!=null?fmt(s.avgF):"–"}</dd><dt>DNFs</dt><dd>${s.dnf}</dd></dl></div></div>
+  <h3 style="margin-top:16px">By season</h3><div class="tw"><table><thead><tr><th>Year</th><th class=n>#</th><th class=n>Age</th><th>Team</th><th class=n>Starts</th><th class=n>Wins</th><th class=n>Poles</th><th class=n>T5</th><th class=n>T10</th><th class=n>Led</th><th class=n>Avg fin</th><th class=n>Pts</th><th class=n>Avg rating</th></tr></thead><tbody>${yrs}</tbody></table></div>
+  ${(()=>{const xs=(d.exh||[]).map(ev=>{const x=(ev.res||[]).find(z=>z.d===dr.id);return x&&(!ui.logWins||x.f===1)?`<tr><td><a href="#" data-act="exrace" data-id="${ev.id}" data-from="${dr.id}">${esc(ev.name)||"Event"}</a></td><td>${esc(ev.kind||"")}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td></tr>`:""}).join("");return xs?`<h3 style="margin-top:16px">${d.year} exhibitions</h3><div class="tw"><table><thead><tr><th>Event</th><th>Type</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th></tr></thead><tbody>${xs}</tbody></table></div>`:""})()}
+  <div class="row" style="margin-top:16px"><h3>${d.year} race log</h3><span class="sp"></span>${logSeg()}</div>${log?`<div class="tw"><table><thead><tr><th class=n>#</th><th>Race</th><th>Track</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th><th class=n>Pts</th></tr></thead><tbody>${log}</tbody></table></div>`:'<p class="muted">'+(ui.logWins?"No wins this season.":"No results yet this season.")+'</p>'}</div></div>`;
 }
 function renderModal(){
   const el=$("#modal");
   if(!ui.modal){el.innerHTML="";return}
-  el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="track"?modalTrack():modalDriver();
+  el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="dlu"?modalDlu():ui.modal.type==="ages"?modalAges():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="track"?modalTrack():modalDriver();
 }
 function openRace(id,exh){
   const d=cur(),r=(exh?(d.exh||[]):d.races).find(x=>x.id===id);if(!r)return;
@@ -1497,7 +1605,7 @@ function applyNR(d,r,p){
   if(!r.track&&p.track)r.track=titleCase(p.track);
   if(!r.name)r.name=titleCase(p.track||"Race");
   r.cautions=p.cautions;r.lc=p.lc;
-  if(p.qual&&p.qual.length){
+  if(p.qual&&p.qual.length&&!(r.qual&&r.qual.length&&(r.kind==="Duel"||r.qsrc==="lineup"))){
     const q=[];p.qual.forEach(x=>{const dr=d.drivers.find(z=>z.name.trim().toLowerCase()===String(x.name||"").toLowerCase());if(dr)q.push({d:dr.id,p:x.p,t:x.time||""})});
     r.qual=q;
   }
@@ -1717,7 +1825,7 @@ async function importCars(files){
 }
 
 /* ---------- actions ---------- */
-const mkDriver=()=>({id:uid(),num:"",name:"",team:"",make:"",sponsor:"",pf:true,rookie:false,r:{}});
+const mkDriver=()=>({id:uid(),num:"",name:"",age:"",team:"",make:"",sponsor:"",pf:true,rookie:false,r:{}});
 const ACT={
   series:b=>{ui.series=b.dataset.v;ui.filter="";},
   view:b=>{ui.view=b.dataset.v;ui.filter="";},
@@ -1790,6 +1898,9 @@ const ACT={
   lineup:()=>{ui.modal={type:"lineup",files:[],skip:{},lock:0,n1:"Duel 1",n2:"Duel 2",race:""};renderModal();return "nr"},
   lnPick:()=>{const e=document.getElementById("lnFile");if(e)e.click();return "nr"},
   lnRm:b=>{ui.modal.files.splice(+b.dataset.i,1);renderModal();return "nr"},
+  dlu:()=>{const d=cur(),ds=(d.exh||[]).filter(e=>e.kind==="Duel"&&(e.res||[]).length),nr=d.races.find(r=>!r.done);ui.modal={type:"dlu",a:ds[0]?ds[0].id:"",b:ds[1]?ds[1].id:"",race:nr?nr.id:"",swap:false};renderModal();return "nr"},
+  dluApply:()=>{const d=cur(),m=ui.modal,r=d.races.find(x=>x.id===m.race),rows=dluBuild(d,m);if(!r||!rows.length)return "nr";
+    r.qual=rows.map((x,i)=>({d:x.d,p:i+1,t:x.t||""}));r.qsrc="lineup";touch(docId(d.series,d.year));ui.modal=null;renderModal();toast("Starting lineup saved to "+(r.name||"the race")+" ("+rows.length+" drivers)")},
   lnLstPick:()=>{const e=document.getElementById("lnLst");if(e)e.click();return "nr"},
   lnDirPick:()=>{const m=ui.modal;(async()=>{
     if(window.showDirectoryPicker){
@@ -1815,8 +1926,8 @@ const ACT={
     const idOf=x=>{let dr=d.drivers.find(z=>z.name.trim().toLowerCase()===x.k);if(!dr){dr=mkDriver();dr.num=x.num;dr.name=x.name;d.drivers.push(dr);added++}else if(!dr.num)dr.num=x.num;return dr.id};
     const q=(list,off)=>list.map((x,i)=>({d:idOf(x),p:i+1+(off||0),t:x.time||""}));
     d.exh=d.exh||[];const track=titleCase(m.files[0].track||"");
-    [[m.n1||"Duel 1",sp.d1],[m.n2||"Duel 2",sp.d2]].forEach(([nm,list])=>d.exh.push({id:uid(),date:"",name:nm,kind:"Duel",track,laps:"",done:false,res:[],qual:q(list)}));
-    const rc=m.race&&d.races.find(r=>r.id===m.race);if(rc)rc.qual=q(sp.rows);
+    [[m.n1||"Duel 1",sp.d1],[m.n2||"Duel 2",sp.d2]].forEach(([nm,list])=>d.exh.push({id:uid(),date:"",name:nm,kind:"Duel",track,laps:"",done:false,res:[],qual:q(list),qsrc:"lineup",lk:q(sp.locked)}));
+    const rc=m.race&&d.races.find(r=>r.id===m.race);if(rc){rc.qual=q(sp.rows);rc.qsrc="lineup"}
     touch(docId(d.series,d.year));ui.modal=null;ui.view="exhib";renderModal();
     toast("Created "+(m.n1||"Duel 1")+" and "+(m.n2||"Duel 2")+(rc?" and saved qualifying to "+(rc.name||"the race"):"")+(added?", "+added+" driver"+(added===1?"":"s")+" added to the roster":""))},
   adddrv:()=>{const d=cur();d.drivers.push(mkDriver());ui.filter="";touch(docId(d.series,d.year))},
@@ -1849,20 +1960,20 @@ const ACT={
   resetColors:()=>{Object.values(docs).forEach(dd=>{if(dd.color&&DEFK.includes(dd.series)){delete dd.color;touch(docId(dd.series,dd.year))}})},
   poRound:b=>{ui.poRound=+b.dataset.v},
   theme:()=>{themePref=themePref==="auto"?"dark":themePref==="dark"?"light":"auto";try{localStorage.setItem("nr_theme",themePref)}catch(e){}applyTheme()},
-  ptsEdit:b=>{const d=cur(),k=b.dataset.k;if(k==="tablePost"&&!d.settings.tablePost){d.settings.tablePost=[...d.settings.table];touch(docId(d.series,d.year))}if(k==="stagePts"&&!(d.settings.stagePts&&d.settings.stagePts.length)){d.settings.stagePts=[...STAGE_DEF];touch(docId(d.series,d.year))}ui.modal={type:"points",key:k};renderModal();return "nr"},
+  ptsEdit:b=>{const d=cur(),k=b.dataset.k;if(k==="tablePost"&&!d.settings.tablePost){d.settings.tablePost=[...d.settings.table];touch(docId(d.series,d.year))}if(k==="stagePts"&&!(d.settings.stagePts&&d.settings.stagePts.length)){d.settings.stagePts=[...STAGE_DEF];touch(docId(d.series,d.year))}if(k==="duelPts"&&!(d.settings.duelPts&&d.settings.duelPts.length)){d.settings.duelPts=[...STAGE_DEF];touch(docId(d.series,d.year))}ui.modal={type:"points",key:k};renderModal();return "nr"},
   ptAdd:()=>{const d=cur(),a=d.settings[ui.modal.key];a.push(Math.max(0,a.length?a[a.length-1]-(a.length>1?Math.max(0,a[a.length-2]-a[a.length-1]):1):1));touch(docId(d.series,d.year));renderModal();return "nr"},
   ptDel:()=>{const d=cur(),a=d.settings[ui.modal.key];if(a.length>1)a.pop();touch(docId(d.series,d.year));renderModal();return "nr"},
   track:b=>{ui.modal={type:"track",key:b.dataset.k,scope:ui.trkScope||"series"};renderModal();return "nr"},
   trkScope:b=>{ui.trkScope=b.dataset.v},
   awadd:()=>{const d=cur();d.awards=d.awards||[];d.awards.push({id:uid(),name:"",winner:""});touch(docId(d.series,d.year))},
   awdel:b=>{const d=cur();d.awards=(d.awards||[]).filter(a=>a.id!==b.dataset.id);touch(docId(d.series,d.year))},
-  sugg:()=>{const d=cur(),n=d.year+1;ui.modal={type:"sugg",scale:4,min:null,target:docs[docId(d.series,n)]?n:d.year,adj:{},off:{}};renderModal();return "nr"},
+  sugg:()=>{const d=cur(),n=d.year+1;ui.modal={type:"sugg",age:true,scale:4,min:null,target:docs[docId(d.series,n)]?n:d.year,adj:{},off:{}};renderModal();return "nr"},
   sgApply:()=>{const d=cur(),mo=ui.modal,done=d.races.filter(r=>r.done).length,minS=mo.min!=null?mo.min:Math.max(3,Math.ceil(done*.25));
     const tgt=docs[docId(d.series,mo.target)];if(!tgt){toast("That season does not exist");return "nr"}
     let n=0,miss=0;
-    suggestions(d,mo.scale,minS).forEach(r=>{if(mo.off&&mo.off[r.id])return;
+    suggestions(d,mo.scale,minS,mo.age!==false).forEach(r=>{if(mo.off&&mo.off[r.id])return;
       const t=tgt.drivers.find(z=>z.name.trim().toLowerCase()===r.x.name.trim().toLowerCase());if(!t){miss++;return}
-      const ov=+sgVal(r,"ov",mo)||0;let ch=false;
+      const ov=(+sgVal(r,"ov",mo)||0)+(+sgVal(r,"ag",mo)||0);let ch=false;
       RATE.filter(c=>c[2]==="d").forEach(([k])=>{const v=rg(t,k);if(!v)return;
         const dl=ov+(k==="qua"||k==="fin"||k==="con"?(+sgVal(r,k,mo)||0):0);if(!dl)return;
         t.r[k]={a:Math.max(0,Math.min(100,v.a+dl)),b:Math.max(0,Math.min(100,v.b+dl))};ch=true});
@@ -1898,9 +2009,17 @@ const ACT={
       seedDocs(y);refreshSeries();ui.year=y;ui.series=SERIES[0][0];ui.view="overview";ui.modal=null;saveUi();renderModal();render();toast("Cleared. Starting fresh in "+y)});return "nr"},
   stFilter:b=>{ui.stFilter=b.dataset.v},
   rateGroup:b=>{ui.rateGroup=b.dataset.v},
+  ageLookup:()=>{const m={type:"ages",rows:[],miss:[],ref:ageRef(),status:"running",done:0,total:0};ui.modal=m;renderModal();ageRun(m);return "nr"},
+  ageApply:()=>{const m=ui.modal,sel=m.rows.filter(r=>r.use);let n=0;
+    sel.forEach(r=>{Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.year===ui.year){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===r.name.toLowerCase()){z.age=r.age;ch=true}});if(ch)touch(did)}});n++});
+    ui.modal=null;renderModal();toast(n+" age"+(n===1?"":"s")+" updated for "+ui.year)},
+  recScope:b=>{ui.recScope=b.dataset.v},
+  sortDrvs:b=>{const c=b.dataset.v;if((ui.drvSort||"name")===c)ui.drvDir=-(ui.drvDir||1);else{ui.drvSort=c;ui.drvDir=1}},
+  drvAt:b=>{ui.series=b.dataset.s;ui.modal={type:"driver",id:b.dataset.id};renderModal()},
   sortRos:b=>{const c=b.dataset.v;if(ui.rosSort===c)ui.rosDir*=-1;else{ui.rosSort=c;ui.rosDir=(c==="pf"||c==="rookie")?-1:1}},
   clearRoster:()=>{const d=cur();d.drivers=[];d.races.forEach(r=>{r.res=[];r.done=false;r.cautions="";r.lc=""});(d.exh||[]).forEach(r=>{r.res=[];r.done=false});ui.filter="";touch(docId(d.series,d.year));toast("Roster cleared")},
-  race:b=>{openRace(b.dataset.id);if(b.dataset.from&&ui.modal)ui.modal.back={type:"driver",id:b.dataset.from};return "nr"},
+  race:b=>{openRace(b.dataset.id);if(ui.modal){if(b.dataset.from)ui.modal.back={type:"driver",id:b.dataset.from};else if(b.dataset.fromteam)ui.modal.back={type:"team",team:b.dataset.fromteam}}return "nr"},
+  logFilter:b=>{ui.logWins=b.dataset.v==="wins";renderModal();return "nr"},
   drv:b=>{ui.modal={type:"driver",id:b.dataset.id};renderModal();return "nr"},
   close:()=>{const bk=ui.modal&&ui.modal.back;ui.modal=bk||null;renderModal()},
   csv:()=>{exportCSV(cur());return "nr"},
@@ -1920,7 +2039,7 @@ const ACT={
   mFill:()=>{const m=ui.modal,d=cur(),have=new Set(m.rows.map(x=>x.d));
     d.drivers.filter(x=>!have.has(x.id)).sort((a,b)=>num(a.num)-num(b.num)).forEach(x=>m.rows.push({d:x.id,f:m.rows.length+1,s:"",l:0,n:0,x:"Running"}));renderModal();return "nr"},
   mPaste:()=>{const t=$("#pasteBox").value;if(!t.trim())return "nr";const {out,miss}=parsePaste(cur(),t);ui.modal.rows=out;renderModal();if(miss)toast(miss+" line"+(miss>1?"s":"")+" didn't match a driver. Pick them in the table.");return "nr"},
-  mClear:()=>{const d=cur(),r=mlist(d).find(x=>x.id===ui.modal.id);r.res=[];r.qual=[];r.stg=[];r.done=false;touch(docId(d.series,d.year));ui.modal=null;renderModal()},
+  mClear:()=>{const d=cur(),r=mlist(d).find(x=>x.id===ui.modal.id);r.res=[];if(!(r.kind==="Duel"||r.qsrc==="lineup"))r.qual=[];r.stg=[];r.done=false;touch(docId(d.series,d.year));ui.modal=null;renderModal()},
   mSave:()=>{
     const d=cur(),r=mlist(d).find(x=>x.id===ui.modal.id);
     const rows=ui.modal.rows.filter(x=>x.d);
@@ -1968,7 +2087,7 @@ const ACT={
       if(src){nd.name=src.name;nd.settings=JSON.parse(JSON.stringify(src.settings));if(src.color)nd.color=src.color;
         if(cr&&src.teams)nd.teams=JSON.parse(JSON.stringify(src.teams));
         if(cs)nd.exh=(src.exh||[]).map(r=>({id:uid(),date:"",name:r.name,kind:r.kind,track:r.track,laps:r.laps,done:false,res:[]}));
-        if(cr)nd.drivers=JSON.parse(JSON.stringify(src.drivers)).map(x=>{x.rookie=false;return x});
+        if(cr)nd.drivers=JSON.parse(JSON.stringify(src.drivers)).map(x=>{x.rookie=false;if(x.age!==""&&x.age!=null&&!isNaN(x.age))x.age=+x.age+(y-src.year);return x});
         if(cs)nd.races=src.races.map(r=>({id:uid(),date:"",name:r.name,track:r.track,type:r.type,len:r.len,laps:r.laps,done:false,res:[]}))}
       docs[docId(k,y)]=nd;touch(docId(k,y));
     });
@@ -2021,6 +2140,8 @@ document.addEventListener("change",e=>{
       const bad=rs.filter(r=>r.bad).map(r=>r.bad);rs.filter(r=>!r.bad).forEach(r=>ui.modal.files.push(r));
       if(bad.length)toast("No qualifying session found in: "+bad.join(", "));
       if(ui.modal&&ui.modal.type==="lineup")renderModal()});return}
+  if(ui.modal&&ui.modal.type==="ages"&&t.dataset.agu!==undefined){ui.modal.rows[+t.dataset.agu].use=t.checked;renderModal();return}
+  if(ui.modal&&ui.modal.type==="dlu"&&t.dataset.dlp){const k=t.dataset.dlp;ui.modal[k]=k==="swap"?t.value==="1":t.value;setTimeout(renderModal,0);return}
   if(ui.modal&&ui.modal.type==="lineup"){const mo=ui.modal;
     if(t.dataset.lnskip!==undefined){mo.skip[t.dataset.lnskip]=!t.checked;renderModal();return}
     if(t.id==="lnDir"){const fs=[...t.files];t.value="";mo.dir=null;lnReadFiles(fs,null);return}
@@ -2043,7 +2164,7 @@ document.addEventListener("change",e=>{
   if(ui.modal&&ui.modal.type==="sugg"){const mo=ui.modal;
     if(t.dataset.sgsel){mo.off[t.dataset.sgsel]=!t.checked;t.closest("tr").classList.toggle("dim",!t.checked);return}
     if(t.dataset.sg){const v=Math.round(num(t.value));mo.adj[t.dataset.id+":"+t.dataset.sg]=v;t.value=v;t.classList.toggle("up",v>0);t.classList.toggle("dn",v<0);return}
-    if(t.dataset.sgp){const k=t.dataset.sgp;mo[k]=k==="target"?+t.value:Math.max(k==="min"?1:.5,num(t.value));if(k!=="target")mo.adj={};setTimeout(renderModal,0);return}}
+    if(t.dataset.sgp){const k=t.dataset.sgp;mo[k]=k==="target"?+t.value:k==="age"?t.checked:Math.max(k==="min"?1:.5,num(t.value));if(k!=="target")mo.adj={};setTimeout(renderModal,0);return}}
   if(t.dataset.pt!==undefined&&ui.modal&&ui.modal.type==="points"&&d){const a=d.settings[ui.modal.key];a[+t.dataset.pt]=Math.max(0,num(t.value));touch(docId(d.series,d.year));return}
   if(t.dataset.ptpreset!==undefined&&ui.modal&&ui.modal.type==="points"&&d){const pr=presetsFor(ui.modal.key)[t.value];if(pr){d.settings[ui.modal.key]=[...pr[1]];touch(docId(d.series,d.year));renderModal()}return}
   if(t.id==="yearSel"){ui.year=+t.value;setTimeout(render,0);return}
@@ -2062,7 +2183,10 @@ document.addEventListener("change",e=>{
   const id=docId(d.series,d.year),k=t.dataset.k,val=t.type==="checkbox"?t.checked:t.value;
   if(ed==="exh"){const r=(d.exh||[]).find(x=>x.id===t.dataset.id);if(r)r[k]=val}
   else if(ed==="race"){const r=d.races.find(x=>x.id===t.dataset.id);if(r)r[k]=(k==="len"||k==="laps")&&val!==""?num(val):val}
-  else if(ed==="drv"){const x=drvOf(d,t.dataset.id);if(x)x[k]=val}
+  else if(ed==="drv"){const x=drvOf(d,t.dataset.id);if(x){
+    if(k==="age"){const a=String(val).trim()===""?"":Math.max(0,Math.min(120,Math.round(num(val))));t.value=a;x.age=a;
+      Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd!==d&&dd.year===d.year)dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()){z.age=a;touch(did)}})})}
+    else x[k]=val}}
   else if(ed==="rate"){const x=drvOf(d,t.dataset.id);if(x){x.r=x.r||{};const td=t.closest("td"),ia=td.querySelector('[data-e="a"]'),ib=td.querySelector('[data-e="b"]');
     if(ia.value===""&&ib.value==="")delete x.r[k];
     else{let a=ia.value===""?num(ib.value):num(ia.value),b=ib.value===""?a:num(ib.value);a=Math.max(0,Math.min(100,Math.round(a)));b=Math.max(0,Math.min(100,Math.round(b)));if(a>b)[a,b]=[b,a];
@@ -2076,6 +2200,7 @@ document.addEventListener("change",e=>{
   else if(ed==="doc"){d.name=val.trim()||d.name;touch(id);setTimeout(render,0);return}
   else if(ed==="set"){d.settings[k]=num(val)}
   else if(ed==="setstr"){d.settings[k]=val}
+  else if(ed==="duel"){d.settings.duel=Object.assign(d.settings.duel||{},{on:!!val});touch(id);setTimeout(render,0);return}
   else if(ed==="stg"){const g=d.settings.stages=d.settings.stages||{on:false,count:2};g[k]=t.type==="checkbox"?val:k==="pp"?Math.max(0,num(val)):Math.max(1,Math.min(8,Math.round(num(val))||2));touch(id);setTimeout(render,0);return}
   else if(ed==="chasestr"){d.settings.chase[k]=val}
   else if(ed==="chase"){d.settings.chase[k]=t.type==="checkbox"?val:num(val)}
