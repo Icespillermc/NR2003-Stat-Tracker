@@ -890,7 +890,7 @@ function vExhib(d){
   const kseg=`<div class="seg" role="group" aria-label="Filter by event type">${["all",...KINDS].map(k=>`<button data-act="exKind" data-v="${k}" class="${kf===k?"on":""}">${k==="all"?"All":k}${cnt(k)?` ${cnt(k)}`:""}</button>`).join("")}</div>`;
   return `<div class="row"><h2>${esc(d.name)} Exhibitions</h2><span class="sp"></span>
     <select id="exKind" aria-label="Event type">${KINDS.map(k=>`<option>${k}</option>`).join("")}</select><button class="btn" data-act="exadd">+ Add event</button>
-    <button class="btn pri" data-act="exPick">Import NR2003 results</button><input type="file" id="exFile" accept=".html,.htm,text/html" multiple hidden>
+    <button class="btn" data-act="lineup" title="Combine qualifying from two or three sessions and split it into two duel lineups">Duel lineups</button><button class="btn pri" data-act="exPick">Import NR2003 results</button><input type="file" id="exFile" accept=".html,.htm,text/html" multiple hidden>
     ${ev.length?'<button class="btn danger" data-act="exclear" data-confirm="1">Clear exhibitions</button>':""}</div>
     <div class="help">Clashes, duels, all-star races and opens are tracked here and kept out of the points standings and the regular stats.</div>
     <div class="card tw">${ev0.length?`<div class="row" style="padding:10px 12px 0">${kseg}</div>`:""}
@@ -1180,6 +1180,86 @@ function modalRBulk(){
       <div><button class="btn pri" data-act="rbShuf" data-confirm="1" ${n>1?"":"disabled"}>Shuffle selected races</button></div></div>
   </div></div>`;
 }
+function lnSecs(t){t=String(t||"").trim();let m=t.match(/^(\d+):(\d+(?:\.\d+)?)$/);if(m)return +m[1]*60+ +m[2];return /^\d+(?:\.\d+)?$/.test(t)?+t:null}
+function lnCombine(m){
+  const by=new Map(),allT=m.files.some(f=>f.rows.some(r=>lnSecs(r.time)!=null));
+  m.files.forEach((f,fi)=>f.rows.forEach(r=>{const k=r.name.trim().toLowerCase(),sc=lnSecs(r.time),v=allT?(sc!=null?sc:1e6+r.p):r.p,e=by.get(k);
+    if(!e||v<e.v)by.set(k,{k,name:r.name,num:r.num,time:r.time,v,p:r.p,src:fi+1})}));
+  return {rows:[...by.values()].sort((a,b)=>a.v-b.v||a.p-b.p||a.name.localeCompare(b.name)),byTime:allT};
+}
+function lnSplit(m){
+  const c=lnCombine(m),rows=c.rows.filter(x=>!m.skip[x.k]),lock=Math.max(0,Math.min(rows.length,m.lock|0)),rest=rows.slice(lock);
+  return {all:c.rows,byTime:c.byTime,rows,locked:rows.slice(0,lock),d1:rest.filter((_,i)=>i%2===0),d2:rest.filter((_,i)=>i%2===1)};
+}
+const lnNm=v=>String(v||"").replace(/\s+/g," ").trim().toLowerCase(),lnNo=v=>String(v==null?"":v).trim().replace(/^0+(?=\d)/,"");
+function lnPlan(m,list){ // -> {text,on:[{x,file}],missing:[x]}
+  const txt=m.lsts&&m.lsts[m.lst];if(txt==null||!m.cars)return null;
+  const nl=txt.includes("\r\n")?"\r\n":"\n",lines=txt.split(/\r?\n/);
+  const byFile=new Map(m.cars.map(c=>[c.file.toLowerCase(),c]));
+  const ent=lines.map(l=>{const mm=l.match(/^([+-])\s*(.+?)\s*$/);return mm?{on:mm[1]==="+",file:mm[2],car:byFile.get(mm[2].toLowerCase())||null}:null});
+  const pick=new Map(),on=[],missing=[];
+  list.forEach(x=>{
+    const cands=[];ent.forEach((e,i)=>{if(e&&e.car&&lnNm(e.car.name)===lnNm(x.name)&&lnNo(e.car.num)===lnNo(x.num)&&lnNo(x.num)!=="")cands.push(i)});
+    if(!cands.length){missing.push(x);return}
+    const i=cands.find(i=>ent[i].on)??cands[0];pick.set(i,x);on.push({x,file:ent[i].file});
+  });
+  const out=lines.map((l,i)=>ent[i]?(pick.has(i)?"+":"-")+ent[i].file:l).join(nl);
+  return {text:out,on,missing};
+}
+function lnRosterSum(m){
+  if(!m.cars)return "";
+  const sp=lnSplit(m),a=lnPlan(m,sp.d1),b=lnPlan(m,sp.d2);
+  if(!a)return `<div class="help">Found ${m.cars.length} car file${m.cars.length===1?"":"s"}${m.lsts&&Object.keys(m.lsts).length?"":" but no .lst file. Choose one."}</div>`;
+  const row=(nm,pl,n)=>`<tr><td><b>${esc(nm)}</b></td><td class="n">${pl.on.length} of ${n}</td><td>${pl.missing.length?`<span class="bad">No car with the same name and number: ${pl.missing.map(x=>"#"+esc(x.num)+" "+esc(x.name)).join(", ")}</span>`:'<span class="muted">All matched</span>'}</td></tr>`;
+  return `<div class="tw"><table><thead><tr><th>Roster file</th><th class="n">Cars enabled</th><th></th></tr></thead><tbody>${row(m.n1||"Duel 1",a,sp.d1.length)}${row(m.n2||"Duel 2",b,sp.d2.length)}</tbody></table></div><div class="small muted">Only cars whose name and number both match a driver in that duel are switched on (+). Every other car in the list is switched off (-). A driver with several paint schemes gets one car enabled, keeping the one already enabled if it matches.</div>`;
+}
+async function lnReadFiles(fs,dir,lstOnly){
+  const m=ui.modal;if(!m||m.type!=="lineup")return;
+  const dec=b=>new TextDecoder("latin1").decode(b);
+  if(!lstOnly){m.cars=[];}
+  m.lsts=m.lsts||{};let bad=0;
+  for(const f of fs){
+    const nm=f.name;
+    try{
+      if(/\.lst$/i.test(nm)||(lstOnly&&/\.txt$/i.test(nm))){m.lsts[nm]=dec(await f.arrayBuffer());m.lst=lstOnly||!m.lst?nm:m.lst}
+      else if(!lstOnly&&/\.car$/i.test(nm)){const c=parseCar(await f.arrayBuffer());if(c&&c.name)m.cars.push({file:nm,name:c.name,num:c.num});else bad++}
+    }catch(e){bad++}
+  }
+  if(!lstOnly&&!m.cars.length){toast("No readable car files in that folder");m.cars=null}
+  else if(!m.cars)m.cars=[];
+  if(m.lst&&!m.lsts[m.lst])m.lst=Object.keys(m.lsts)[0]||"";
+  if(ui.modal===m)renderModal();
+}
+function lnLists(m){
+  const sp=lnSplit(m),tb=(list,start)=>`<table><thead><tr><th class="n">Pos</th><th class="n">#</th><th>Driver</th><th class="n">Time</th></tr></thead><tbody>${list.map((x,i)=>`<tr><td class="n">${i+1+(start||0)}</td><td class="n"><span class="car">${esc(x.num)}</span></td><td>${esc(x.name)}</td><td class="n">${esc(x.time||"")}</td></tr>`).join("")||'<tr><td colspan="4" class="muted" style="padding:10px">None</td></tr>'}</tbody></table>`;
+  return `<div class="grid2" style="gap:16px"><div><h3 style="font-size:17px">Combined lineup</h3><div class="small muted" style="margin-bottom:6px">${sp.byTime?"Each driver's best time across the sessions. Drivers with no time go last.":"The files have no lap times, so each driver's best qualifying position is used."} Uncheck a driver to leave them out.</div>
+      <div class="tw" style="max-height:340px;overflow:auto"><table><thead><tr><th></th><th class="n">Pos</th><th class="n">#</th><th>Driver</th><th class="n">Time</th><th class="n">From</th></tr></thead><tbody>${sp.all.map((x,i)=>{const out=m.skip[x.k],pos=out?"–":sp.rows.indexOf(x)+1;return `<tr class="${out?"dim":""}"><td><input type="checkbox" data-lnskip="${esc(x.k)}" ${out?"":"checked"} aria-label="Include ${esc(x.name)}"></td><td class="n">${pos}</td><td class="n"><span class="car">${esc(x.num)}</span></td><td>${esc(x.name)}</td><td class="n">${esc(x.time||"")}</td><td class="n">Q${x.src}</td></tr>`}).join("")}</tbody></table></div></div>
+    <div style="display:flex;flex-direction:column;gap:12px">${sp.locked.length?`<div><h3 style="font-size:17px">Locked in</h3><div class="tw">${tb(sp.locked)}</div></div>`:""}
+      <div><h3 style="font-size:17px">${esc(m.n1)||"Duel 1"} <span class="muted small">odd positions</span></h3><div class="tw">${tb(sp.d1)}</div></div>
+      <div><h3 style="font-size:17px">${esc(m.n2)||"Duel 2"} <span class="muted small">even positions</span></h3><div class="tw">${tb(sp.d2)}</div></div></div></div>`;
+}
+function modalLineup(){
+  const d=cur(),m=ui.modal;
+  return `<div class="dlg" role="dialog" aria-label="Duel lineups" data-s="${ui.series}" style="max-width:960px"><header><h3>Duel lineups</h3><span class="muted">${esc(d.name)} · ${d.year}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body" style="display:flex;flex-direction:column;gap:16px">
+    <div class="sect"><h3 style="font-size:17px">1. Add qualifying results</h3>
+      <div class="row"><button class="btn pri" data-act="lnPick">Add results file</button><input type="file" id="lnFile" accept=".html,.htm,text/html" multiple hidden><span class="small muted">Add two or three NR2003 results files that have a Qualifying session.</span></div>
+      ${m.files.length?`<div class="row" style="gap:8px">${m.files.map((f,i)=>`<span class="pill">Q${i+1} · ${esc(f.name)} · ${f.rows.length} drivers <button class="btn sm danger" data-act="lnRm" data-i="${i}" aria-label="Remove file">✕</button></span>`).join("")}</div>`:'<div class="small muted">No files yet.</div>'}</div>
+    <div class="sect"><h3 style="font-size:17px">2. Split into duels</h3>
+      <div class="fields"><label class="fld">First duel name<input type="text" data-lnp="n1" value="${esc(m.n1)}" style="width:150px"></label><label class="fld">Second duel name<input type="text" data-lnp="n2" value="${esc(m.n2)}" style="width:150px"></label>
+        <label class="fld">Locked in (skip the duels)<input type="number" min="0" max="10" data-lnp="lock" value="${m.lock}" style="width:90px"></label></div>
+      <div class="small muted">The first duel gets the 1st, 3rd, 5th… qualifiers and the second duel gets the 2nd, 4th, 6th…. If some drivers are locked in, they come off the top and the split starts after them.</div></div>
+    <div id="lnLists">${m.files.length?lnLists(m):'<div class="empty">The lineups appear here once you add a file.</div>'}</div>
+    <div class="sect"><h3 style="font-size:17px">3. Roster files for the sim (optional)</h3>
+      <div class="small muted">Makes a copy of your NR2003 car list (.lst) for each duel with only that duel's cars turned on, so you don't have to switch drivers on and off by hand.</div>
+      <div class="row"><button class="btn" data-act="lnDirPick">Choose car folder</button><input type="file" id="lnDir" webkitdirectory multiple hidden><button class="btn" data-act="lnLstPick">Choose .lst file</button><input type="file" id="lnLst" accept=".lst,.txt" hidden>
+        ${m.cars?`<span class="small muted">${m.cars.length} car files</span>`:""}${m.lsts&&Object.keys(m.lsts).length>1?`<select data-lnp="lst">${Object.keys(m.lsts).map(k=>`<option ${k===m.lst?"selected":""}>${esc(k)}</option>`).join("")}</select>`:m.lst?`<span class="small muted">${esc(m.lst)}</span>`:""}</div>
+      <div id="lnRost">${m.files.length?lnRosterSum(m):""}</div>
+      <div><button class="btn pri" data-act="lnRoster" ${m.files.length&&m.cars&&m.lst?"":"disabled"}>Create roster files for both duels</button></div></div>
+    <div class="sect"><label class="fld">Also save the combined lineup as qualifying for a race (optional)<select data-lnp="race" style="max-width:340px"><option value="">Don't save it to a race</option>${d.races.map((r,i)=>`<option value="${r.id}" ${m.race===r.id?"selected":""}>${i+1}. ${esc(r.name)||"Unnamed race"}</option>`).join("")}</select></label></div>
+  </div>
+  <footer><span class="small muted">Creates two Duel events under Exhibitions, each with its starting lineup on its Qualifying tab.</span><span class="sp"></span><button class="btn" data-act="lnCopy" ${m.files.length?"":"disabled"}>Copy as text</button><button class="btn pri" data-act="lnMake" ${m.files.length?"":"disabled"}>Create duel events</button></footer></div>`;
+}
 function modalSugg(){
   const d=cur(),mo=ui.modal,done=d.races.filter(r=>r.done).length;
   const minS=mo.min!=null?mo.min:Math.max(3,Math.ceil(done*.25));
@@ -1309,20 +1389,20 @@ function modalDriver(){
   const d=cur(),dr=drvOf(d,ui.modal.id);if(!dr)return "";
   const s=agg([d],(a,b)=>b.id).get(dr.id);
   const pm=new Map();d.races.forEach(r=>{if(r.done)pm.set(r.id,racePoints(d,r))});
-  const log=d.races.map((r,i)=>{const x=(r.res||[]).find(z=>z.d===dr.id);return x?`<tr><td class="n">${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.track)}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td><td class="n">${pm.get(r.id).get(dr.id)}</td></tr>`:""}).join("");
+  const log=d.races.map((r,i)=>{const x=(r.res||[]).find(z=>z.d===dr.id);return x?`<tr><td class="n">${i+1}</td><td><a href="#" data-act="race" data-id="${r.id}" data-from="${dr.id}">${esc(r.name)||"Unnamed race"}</a></td><td>${esc(r.track)}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td><td class="n">${pm.get(r.id).get(dr.id)}</td></tr>`:""}).join("");
   const yrs=docsFor(ui.series).map(dd=>{const dx=dd.drivers.find(z=>z.name.trim().toLowerCase()===dr.name.trim().toLowerCase());if(!dx)return "";const z=agg([dd],(a,b)=>b.id).get(dx.id);
     const ar=avgRate(dx,"d");return `<tr><td>${dd.year}</td><td class="n"><span class="car">${esc(dx.num)}</span></td><td>${esc(dx.team)}</td><td class="n">${z.starts}</td><td class="n">${z.wins}</td><td class="n">${z.poles}</td><td class="n">${z.t5}</td><td class="n">${z.t10}</td><td class="n">${z.led}</td><td class="n">${z.avgF!=null?fmt(z.avgF):"–"}</td><td class="n">${z.pts}</td><td class="n">${ar==null?"–":f1(ar)}</td></tr>`}).join("");
   return `<div class="dlg" role="dialog" aria-label="Driver card" data-s="${ui.series}"><header><span class="car" style="font-size:22px">${esc(dr.num)}</span><h3>${esc(dr.name)}</h3><span class="muted">${esc(dr.team)} ${dr.make?"· "+esc(dr.make):""}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body"><div class="grid2"><div><h3>Driver ratings <span class="muted" style="font-size:15px">avg ${avgRate(dr,"d")==null?"–":f1(avgRate(dr,"d"))}</span></h3>${RATE.filter(r=>r[2]==="d").map(([c,n])=>{const v=rg(dr,c);return `<div class="rt"><span>${n}</span><i><b style="margin-left:${v?v.a:0}%;width:${v?Math.max(v.b-v.a,1):0}%"></b></i><span class="n">${rtxt(v)}</span></div>`}).join("")}</div>
   <div><h3>${d.year} season</h3><dl class="kv" style="margin-top:6px"><dt>Points</dt><dd><b>${s.pts}</b></dd><dt>Starts</dt><dd>${s.starts}</dd><dt>Wins / Poles</dt><dd>${s.wins} / ${s.poles}</dd><dt>Top 5 / Top 10</dt><dd>${s.t5} / ${s.t10}</dd><dt>Laps led</dt><dd>${s.led}</dd><dt>Avg start / finish</dt><dd>${s.avgS!=null?fmt(s.avgS):"–"} / ${s.avgF!=null?fmt(s.avgF):"–"}</dd><dt>DNFs</dt><dd>${s.dnf}</dd></dl></div></div>
   <h3 style="margin-top:16px">By season</h3><div class="tw"><table><thead><tr><th>Year</th><th class=n>#</th><th>Team</th><th class=n>Starts</th><th class=n>Wins</th><th class=n>Poles</th><th class=n>T5</th><th class=n>T10</th><th class=n>Led</th><th class=n>Avg fin</th><th class=n>Pts</th><th class=n>Avg rating</th></tr></thead><tbody>${yrs}</tbody></table></div>
-  ${(()=>{const xs=(d.exh||[]).map(ev=>{const x=(ev.res||[]).find(z=>z.d===dr.id);return x?`<tr><td>${esc(ev.name)}</td><td>${esc(ev.kind||"")}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td></tr>`:""}).join("");return xs?`<h3 style="margin-top:16px">${d.year} exhibitions</h3><div class="tw"><table><thead><tr><th>Event</th><th>Type</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th></tr></thead><tbody>${xs}</tbody></table></div>`:""})()}
+  ${(()=>{const xs=(d.exh||[]).map(ev=>{const x=(ev.res||[]).find(z=>z.d===dr.id);return x?`<tr><td><a href="#" data-act="exrace" data-id="${ev.id}" data-from="${dr.id}">${esc(ev.name)||"Event"}</a></td><td>${esc(ev.kind||"")}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td></tr>`:""}).join("");return xs?`<h3 style="margin-top:16px">${d.year} exhibitions</h3><div class="tw"><table><thead><tr><th>Event</th><th>Type</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th></tr></thead><tbody>${xs}</tbody></table></div>`:""})()}
   <h3 style="margin-top:16px">${d.year} race log</h3>${log?`<div class="tw"><table><thead><tr><th class=n>#</th><th>Race</th><th>Track</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th><th class=n>Pts</th></tr></thead><tbody>${log}</tbody></table></div>`:'<p class="muted">No results yet this season.</p>'}</div></div>`;
 }
 function renderModal(){
   const el=$("#modal");
   if(!ui.modal){el.innerHTML="";return}
-  el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="track"?modalTrack():modalDriver();
+  el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="track"?modalTrack():modalDriver();
 }
 function openRace(id,exh){
   const d=cur(),r=(exh?(d.exh||[]):d.races).find(x=>x.id===id);if(!r)return;
@@ -1707,6 +1787,38 @@ const ACT={
     for(let t=0;t<10;t++){for(let i=sh.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[sh[i],sh[j]]=[sh[j],sh[i]]}if(sh.some((r,i)=>r!==orig[i]))break}
     idx.forEach((ri,k)=>{d.races[ri]=sh[k];if(m.keep)sh[k].date=dates[k]});
     touch(docId(d.series,d.year));ui.modal=null;renderModal();toast("Shuffled "+idx.length+" races")},
+  lineup:()=>{ui.modal={type:"lineup",files:[],skip:{},lock:0,n1:"Duel 1",n2:"Duel 2",race:""};renderModal();return "nr"},
+  lnPick:()=>{const e=document.getElementById("lnFile");if(e)e.click();return "nr"},
+  lnRm:b=>{ui.modal.files.splice(+b.dataset.i,1);renderModal();return "nr"},
+  lnLstPick:()=>{const e=document.getElementById("lnLst");if(e)e.click();return "nr"},
+  lnDirPick:()=>{const m=ui.modal;(async()=>{
+    if(window.showDirectoryPicker){
+      try{const dir=await window.showDirectoryPicker({mode:"readwrite"});const fs=[];for await(const [n,h] of dir.entries()){if(h.kind==="file"&&/\.(car|lst)$/i.test(n))fs.push(await h.getFile())}
+        if(ui.modal!==m)return;m.dir=dir;await lnReadFiles(fs,dir);return}
+      catch(e){if(e&&e.name==="AbortError")return}}
+    const i=document.getElementById("lnDir");if(i)i.click()})();return "nr"},
+  lnRoster:()=>{(async()=>{const m=ui.modal,sp=lnSplit(m),enc=t=>{const u=new Uint8Array(t.length);for(let i=0;i<t.length;i++)u[i]=t.charCodeAt(i)&255;return u};
+    const base=m.lst.replace(/\.[^.]*$/,""),nmf=n=>base+"_"+String(n).replace(/[^a-z0-9]+/gi,"_").replace(/^_|_$/g,"")+".lst";
+    const outs=[[m.n1||"Duel 1",sp.d1],[m.n2||"Duel 2",sp.d2]].map(([n,l])=>({name:nmf(n),text:lnPlan(m,l).text}));
+    if(outs[0].name===outs[1].name){toast("Give the two duels different names");return}
+    if(m.dir){try{for(const o of outs){const h=await m.dir.getFileHandle(o.name,{create:true}),w=await h.createWritable();await w.write(enc(o.text));await w.close()}
+        toast("Wrote "+outs.map(o=>o.name).join(" and ")+" to the car folder");return}catch(e){toast("Couldn't write to that folder, so it's offered as a download instead")}}
+    const files=outs.map(o=>({name:o.name,data:enc(o.text)}));
+    if(dl){dl.save({filename:base+"_duel_rosters.zip",data:makeZip(files)}).then(()=>toast("Roster files saved in a zip. Put them in your NR2003 Cars folder.")).catch(e=>{if(e&&e.code!=="declined")toast("Couldn't save the file")});return}
+    try{files.forEach((f,i)=>setTimeout(()=>{const u=URL.createObjectURL(new Blob([f.data])),a=document.createElement("a");a.href=u;a.download=f.name;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(u)},500)},i*400));toast("Downloading "+files.length+" roster files. Put them in your NR2003 Cars folder.")}catch(e){toast("Downloads aren't available here")}})();return "nr"},
+  lnCopy:()=>{const m=ui.modal,sp=lnSplit(m),f=(t,l,o)=>t+"\n"+l.map((x,i)=>(i+1+(o||0))+". #"+x.num+" "+x.name+(x.time?" ("+x.time+")":"")).join("\n");
+    const txt=[sp.locked.length?f("Locked in",sp.locked):"",f(m.n1||"Duel 1",sp.d1),f(m.n2||"Duel 2",sp.d2)].filter(Boolean).join("\n\n");
+    try{navigator.clipboard.writeText(txt).then(()=>toast("Lineups copied"),()=>toast("Couldn't copy here"))}catch(e){toast("Couldn't copy here")}return "nr"},
+  lnMake:()=>{const d=cur(),m=ui.modal,sp=lnSplit(m);
+    if(sp.rows.length<2){toast("Need at least two drivers");return "nr"}
+    let added=0;
+    const idOf=x=>{let dr=d.drivers.find(z=>z.name.trim().toLowerCase()===x.k);if(!dr){dr=mkDriver();dr.num=x.num;dr.name=x.name;d.drivers.push(dr);added++}else if(!dr.num)dr.num=x.num;return dr.id};
+    const q=(list,off)=>list.map((x,i)=>({d:idOf(x),p:i+1+(off||0),t:x.time||""}));
+    d.exh=d.exh||[];const track=titleCase(m.files[0].track||"");
+    [[m.n1||"Duel 1",sp.d1],[m.n2||"Duel 2",sp.d2]].forEach(([nm,list])=>d.exh.push({id:uid(),date:"",name:nm,kind:"Duel",track,laps:"",done:false,res:[],qual:q(list)}));
+    const rc=m.race&&d.races.find(r=>r.id===m.race);if(rc)rc.qual=q(sp.rows);
+    touch(docId(d.series,d.year));ui.modal=null;ui.view="exhib";renderModal();
+    toast("Created "+(m.n1||"Duel 1")+" and "+(m.n2||"Duel 2")+(rc?" and saved qualifying to "+(rc.name||"the race"):"")+(added?", "+added+" driver"+(added===1?"":"s")+" added to the roster":""))},
   adddrv:()=>{const d=cur();d.drivers.push(mkDriver());ui.filter="";touch(docId(d.series,d.year))},
   deldrv:b=>{const d=cur();d.drivers=d.drivers.filter(x=>x.id!==b.dataset.id);touch(docId(d.series,d.year))},
   sortDrv:()=>{const d=cur();d.drivers.sort((a,b)=>num(a.num)-num(b.num)||a.name.localeCompare(b.name));touch(docId(d.series,d.year))},
@@ -1731,7 +1843,7 @@ const ACT={
   exadd:()=>{const d=cur();d.exh=d.exh||[];const k=($("#exKind")||{}).value||"Other";d.exh.push({id:uid(),date:"",name:k,kind:k,track:"",laps:"",done:false,res:[]});touch(docId(d.series,d.year))},
   exdel:b=>{const d=cur();d.exh=(d.exh||[]).filter(r=>r.id!==b.dataset.id);touch(docId(d.series,d.year))},
   exclear:()=>{const d=cur();d.exh=[];touch(docId(d.series,d.year));toast("Exhibitions cleared")},
-  exrace:b=>{openRace(b.dataset.id,true);return "nr"},
+  exrace:b=>{openRace(b.dataset.id,true);if(b.dataset.from&&ui.modal)ui.modal.back={type:"driver",id:b.dataset.from};return "nr"},
   exPick:()=>{$("#exFile").click();return "nr"},
   exScope:b=>{ui.exScope=b.dataset.v},
   resetColors:()=>{Object.values(docs).forEach(dd=>{if(dd.color&&DEFK.includes(dd.series)){delete dd.color;touch(docId(dd.series,dd.year))}})},
@@ -1788,9 +1900,9 @@ const ACT={
   rateGroup:b=>{ui.rateGroup=b.dataset.v},
   sortRos:b=>{const c=b.dataset.v;if(ui.rosSort===c)ui.rosDir*=-1;else{ui.rosSort=c;ui.rosDir=(c==="pf"||c==="rookie")?-1:1}},
   clearRoster:()=>{const d=cur();d.drivers=[];d.races.forEach(r=>{r.res=[];r.done=false;r.cautions="";r.lc=""});(d.exh||[]).forEach(r=>{r.res=[];r.done=false});ui.filter="";touch(docId(d.series,d.year));toast("Roster cleared")},
-  race:b=>{openRace(b.dataset.id);return "nr"},
+  race:b=>{openRace(b.dataset.id);if(b.dataset.from&&ui.modal)ui.modal.back={type:"driver",id:b.dataset.from};return "nr"},
   drv:b=>{ui.modal={type:"driver",id:b.dataset.id};renderModal();return "nr"},
-  close:()=>{ui.modal=null;renderModal()},
+  close:()=>{const bk=ui.modal&&ui.modal.back;ui.modal=bk||null;renderModal()},
   csv:()=>{exportCSV(cur());return "nr"},
   mUp:b=>{moveRow(+b.dataset.i,+b.dataset.i-1);return "nr"},
   mDn:b=>{moveRow(+b.dataset.i,+b.dataset.i+1);return "nr"},
@@ -1904,6 +2016,18 @@ document.addEventListener("change",e=>{
     if(t.dataset.tmv){const v=t.value===""?"":Math.max(0,Math.min(100,Math.round(num(t.value))));(mo.vals[t.dataset.t]=mo.vals[t.dataset.t]||{})[t.dataset.tmv]=v;t.value=v;const td=t.closest("td");if(td)td.style.background=v===""?"transparent":heat(v);return}
     if(t.dataset.tmall){if(t.value==="")return;const v=Math.max(0,Math.min(100,Math.round(num(t.value)))),k=t.dataset.tmall;Object.keys(mo.vals).forEach(tm=>{mo.vals[tm][k]=v});setTimeout(renderModal,0);return}
     if(t.dataset.tmp){const k=t.dataset.tmp;mo[k]=k==="target"?+t.value:num(t.value);if(k==="target"){const dd=docs[docId(ui.series,mo.target)];if(dd){mo.vals=tmInit(dd);mo.init=JSON.parse(JSON.stringify(mo.vals))}}setTimeout(renderModal,0);return}}
+  if(t.id==="lnFile"&&ui.modal&&ui.modal.type==="lineup"){const fs=[...t.files];t.value="";
+    Promise.all(fs.map(async f=>{try{const p=parseNR(await f.text());return p.qual.length?{name:f.name.replace(/\.html?$/i,""),track:p.track,rows:p.qual.map(x=>({p:x.p,num:x.num||"",name:x.name||"",time:x.time||""})).filter(x=>x.name)}:{bad:f.name}}catch(e){return {bad:f.name}}})).then(rs=>{
+      const bad=rs.filter(r=>r.bad).map(r=>r.bad);rs.filter(r=>!r.bad).forEach(r=>ui.modal.files.push(r));
+      if(bad.length)toast("No qualifying session found in: "+bad.join(", "));
+      if(ui.modal&&ui.modal.type==="lineup")renderModal()});return}
+  if(ui.modal&&ui.modal.type==="lineup"){const mo=ui.modal;
+    if(t.dataset.lnskip!==undefined){mo.skip[t.dataset.lnskip]=!t.checked;renderModal();return}
+    if(t.id==="lnDir"){const fs=[...t.files];t.value="";mo.dir=null;lnReadFiles(fs,null);return}
+    if(t.id==="lnLst"){const fs=[...t.files];t.value="";lnReadFiles(fs,null,true);return}
+    if(t.dataset.lnp){const k=t.dataset.lnp;mo[k]=k==="lock"?Math.max(0,Math.min(10,Math.round(num(t.value)))):t.value;if(k==="lock")t.value=mo.lock;
+      const L=document.getElementById("lnLists");if(L&&mo.files.length&&k!=="race"&&k!=="lst")L.innerHTML=lnLists(mo);
+      const R=document.getElementById("lnRost");if(R&&mo.files.length)R.innerHTML=lnRosterSum(mo);return}}
   if(ui.modal&&ui.modal.type==="rbulk"){const mo=ui.modal;
     if(t.dataset.rb){mo.sel[t.dataset.rb]=t.checked;setTimeout(renderModal,0);return}
     if(t.dataset.rbp==="keep"){mo.keep=t.checked;return}
