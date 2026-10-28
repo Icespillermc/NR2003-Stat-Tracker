@@ -86,7 +86,7 @@ tr.done td:first-child{box-shadow:inset 3px 0 var(--good)}
 tr.next{background:var(--hl)}
 tr.div td{background:var(--accent);color:var(--on-accent);font-family:var(--f-disp);text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;font-weight:600}
 td.name{white-space:normal;min-width:160px}
-.car{display:inline-block;min-width:34px;text-align:center;font-family:var(--f-disp);font-weight:700;font-size:16px;line-height:1;
+.car{cursor:pointer;display:inline-block;min-width:34px;text-align:center;font-family:var(--f-disp);font-weight:700;font-size:16px;line-height:1;
   padding:3px 5px;border:1.5px solid var(--ink);border-radius:3px;background:var(--surface)}
 .rank{font-family:var(--f-disp);font-weight:700;font-size:18px}
 .pill{display:inline-block;font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
@@ -835,8 +835,27 @@ function vTeams(d){
     ${teams.length?`<div class="grid3">${cards}</div>`:'<div class="card empty">Teams come from the Team column on your roster. Add drivers (or import .car files) and each team gets a card.</div>'}
     <p class="small muted">Open a team to see its cars, wins, history and average ratings, and to add the owner, base and notes.</p>`;
 }
+function modalNum(){
+  const n=ui.modal.num,docL=docsFor(ui.series),key=x=>String(x.num==null?"":x.num).trim(),sn=(docL[docL.length-1]||{}).name||"";
+  const tot=agg(docL,(dd,x)=>key(x)).get(n);
+  const names=new Set(),wins=[];
+  const yrs=docL.map(dd=>{
+    const ro=ownerRows(dd).find(r=>r.key===n),ros=dd.drivers.filter(x=>key(x)===n);
+    dd.races.forEach(r=>{if(!r.done)return;const w=(r.res||[]).find(z=>z.f===1),dr=w&&dd.drivers.find(x=>x.id===w.d);if(dr&&key(dr)===n)wins.push({y:dd.year,race:r.name||r.track||"Race",track:r.track,name:dr.name,s:w.s,l:w.l})});
+    if(!ro&&!ros.length)return "";
+    const dn=ro?ro.ds.map(o=>o.x.name):ros.map(x=>x.name);dn.forEach(z=>names.add(z));
+    const teams=[...new Set(ros.map(x=>(x.team||"").trim()).filter(Boolean))];
+    return `<tr><td>${dd.year}</td><td>${dn.map(esc).join(", ")||"–"}</td><td>${esc(teams.join(" / "))}</td><td class="n">${ro?"<b>"+ro.rank+"</b>":"–"}</td><td class="n">${ro?ro.starts:0}</td><td class="n">${ro?ro.wins:0}</td><td class="n">${ro?ro.poles:0}</td><td class="n">${ro?ro.t5:0}</td><td class="n">${ro?ro.t10:0}</td><td class="n">${ro?ro.led:0}</td><td class="n">${ro&&ro.avgF!=null?fmt(ro.avgF):"–"}</td><td class="n">${ro?ro.pts:0}</td></tr>`}).join("");
+  const t=tot||{starts:0,wins:0,poles:0,t5:0,t10:0,led:0,avgF:null};
+  const yc=docL.filter(dd=>dd.drivers.some(x=>key(x)===n)).length;
+  return `<div class="dlg" role="dialog" aria-label="Number history" data-s="${ui.series}"><header><span class="car" style="font-size:26px;cursor:default">${esc(n)}</span><h3>Number history</h3><span class="muted">${esc(sn)}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body"><div class="tiles"><div><b>${yc}</b><small>Seasons</small></div><div><b>${names.size}</b><small>Drivers</small></div><div><b>${t.starts}</b><small>Starts</small></div><div><b>${t.wins}</b><small>Wins</small></div><div><b>${t.poles}</b><small>Poles</small></div><div><b>${t.t5}</b><small>Top 5</small></div><div><b>${t.t10}</b><small>Top 10</small></div><div><b>${t.led}</b><small>Laps led</small></div><div><b>${t.avgF!=null?fmt(t.avgF):"–"}</b><small>Avg finish</small></div></div>
+  ${names.size?`<div class="small muted" style="margin-top:8px">Drivers: ${[...names].map(esc).join(", ")}</div>`:""}
+  <h3 style="margin-top:16px">By season</h3><div class="tw"><table><thead><tr><th>Year</th><th>Driver${"(s)"}</th><th>Team</th><th class=n title="Owner standings position for this number">Pos</th><th class=n>Starts</th><th class=n>Wins</th><th class=n>Poles</th><th class=n>T5</th><th class=n>T10</th><th class=n>Led</th><th class=n>Avg fin</th><th class=n>Pts</th></tr></thead><tbody>${yrs||'<tr><td colspan="12" class="muted" style="padding:12px">This number has not been used yet.</td></tr>'}</tbody></table></div>
+  ${wins.length?`<h3 style="margin-top:16px">Wins</h3><div class="tw"><table><thead><tr><th>Year</th><th>Race</th><th>Track</th><th>Driver</th><th class=n>Start</th><th class=n>Led</th></tr></thead><tbody>${wins.map(w=>`<tr><td>${w.y}</td><td>${esc(w.race)}</td><td>${esc(w.track||"")}</td><td>${esc(w.name)}</td><td class="n">${w.s||"–"}</td><td class="n">${w.l||""}</td></tr>`).join("")}</tbody></table></div>`:""}</div></div>`;
+}
 function modalTeam(){
-  const d=cur(),name=ui.modal.team,ds=d.drivers.filter(x=>teamName(x)===name);
+  const d=cur(),name=ui.modal.team,ds=d.drivers.filter(x=>teamName(x)===name).sort((a,b)=>(num(a.num)-num(b.num))||String(a.num).localeCompare(String(b.num),undefined,{numeric:true})||String(a.name).localeCompare(b.name));
   if(!ds.length)return "";
   const m=agg([d],(a,b)=>b.id),rank=new Map(standings(d).rows.map(s=>[s.id,s.rank]));
   const prof=(d.teams&&d.teams[name])||{};
@@ -1770,7 +1789,7 @@ function modalDriver(){
 function renderModal(){
   const el=$("#modal");
   if(!ui.modal){el.innerHTML="";return}
-  el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="dlu"?modalDlu():ui.modal.type==="ages"?modalAges():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="track"?modalTrack():ui.modal.type==="gfx"?modalGfx():modalDriver();
+  el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="numprof"?modalNum():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="dlu"?modalDlu():ui.modal.type==="ages"?modalAges():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="track"?modalTrack():ui.modal.type==="gfx"?modalGfx():modalDriver();
   if(ui.modal.type==="gfx")gfxDraw();
 }
 function openRace(id,exh){
@@ -2397,6 +2416,8 @@ const ACT={
   }
 };
 document.addEventListener("click",e=>{
+  const cb=e.target.closest(".car");
+  if(cb&&!cb.closest("a,button,input,select,label,[data-act]")&&!(ui.modal&&ui.modal.type==="numprof")){const nn=cb.textContent.trim();if(nn&&cb.closest("#app,.dlg")&&!cb.closest("[data-lnskip],[contenteditable]")){ui.modal={type:"numprof",num:nn,back:ui.modal};renderModal();return}}
   const b=e.target.closest("[data-act]");
   if(!b)return;
   if(b.tagName==="A")e.preventDefault();
