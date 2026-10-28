@@ -1,3 +1,7 @@
+<!--
+  NR2003 Tracker. Copyright (c) 2026. All rights reserved.
+  You may not copy, modify, host or redistribute this file without written permission.
+-->
 <title>NR2003 Tracker</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -552,7 +556,7 @@ function render(){
   if(!d)body='<div class="empty">No data for this season.</div>';
   else body={overview:vOverview,schedule:vSchedule,standings:vStandings,stats:vStats,teams:vTeams,exhib:vExhib,tracks:vTracks,history:vHistory,drivers:vDrivers,roster:vRoster,ratings:vRatings,setup:vSetup}[ui.view](d);
   app.setAttribute("data-s",ui.series);
-  app.innerHTML=head()+`<div class="wrap"><main>${body}</main></div>`;
+  app.innerHTML=head()+`<div class="wrap"><main>${body}</main></div><div class="small muted" style="text-align:center;padding:6px 16px 26px">© 2026 NR2003 Tracker. All rights reserved. Copying or redistributing this site without permission is not allowed.</div>`;
   if(fid!=null){const f=$("#filter");if(f){f.focus();f.setSelectionRange(fid,fid)}}
   saveUi();
 }
