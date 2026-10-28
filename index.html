@@ -810,7 +810,8 @@ const teamName=x=>((x.team||"").trim())||"Unattached";
 const teamLine=x=>teamLink(x)||'<span class="muted">No team</span>';
 const teamLink=x=>(x.team||"").trim()?`<a href="#" class="tl" data-act="team" data-t="${esc(teamName(x))}">${esc(x.team)}</a>`:"";
 const teamKey=x=>teamName(x).trim().toLowerCase();
-const teamDocs=()=>SERIES.map(([k])=>docs[docId(k,ui.year)]).filter(Boolean);
+const teamDocs=()=>SERIES.filter(([k])=>!ui.teamSer||ui.teamSer==="all"||ui.teamSer===k).map(([k])=>docs[docId(k,ui.year)]).filter(Boolean);
+const TSORTS=[["wins","Wins"],["pts","Points"],["starts","Starts"],["poles","Poles"],["t5","Top 5s"],["t10","Top 10s"],["led","Laps led"],["cars","Cars"],["avgF","Average finish"],["rating","Driver rating"],["name","Name"]];
 const numSort=(a,b)=>(num(a.num)-num(b.num))||String(a.num).localeCompare(String(b.num),undefined,{numeric:true})||String(a.name).localeCompare(b.name);
 function teamList(){
   const g=new Map();
@@ -822,7 +823,13 @@ function teamList(){
       ["starts","wins","poles","t5","t10","led","dnf","sf","pts"].forEach(f=>o[f]+=z[f]);
     })});
   g.forEach(o=>{o.drivers.sort((a,b)=>b.s.pts-a.s.pts);o.avgF=o.starts?o.sf/o.starts:null});
-  return [...g.values()].sort((a,b)=>b.wins-a.wins||b.pts-a.pts||a.name.localeCompare(b.name));
+  g.forEach(o=>{o.cars=o.drivers.length;o.rating=meanOf(o.drivers.map(z=>avgRate(z.dr,"d")))});
+  const k=ui.teamSort||"wins",dir=ui.teamDir==="asc"?1:-1,nm=(a,b)=>a.name.localeCompare(b.name);
+  const val=(o,f)=>o[f]==null?(f==="avgF"?1e9:-1e9):o[f];
+  return [...g.values()].sort((a,b)=>{
+    if(k==="name")return (ui.teamDir==="desc"?-1:1)*nm(a,b);
+    if(k==="avgF"){const r=(ui.teamDir==="desc"?-1:1)*(val(a,"avgF")-val(b,"avgF"));return r||nm(a,b)}
+    const r=dir*(val(a,k)-val(b,k));return r||(k==="wins"?b.pts-a.pts:0)||nm(a,b)});
 }
 function vTeams(d){
   const teams=teamList();
@@ -835,7 +842,11 @@ function vTeams(d){
       ${top&&top.s.starts?`<div class="small"><span class="muted">Best driver</span> <b>${esc(top.dr.name)}</b> <span class="muted">· ${multi?esc(top.dd.name)+" ":""}P${top.rank||"–"} · ${top.s.pts} pts</span></div>`:""}
       <div class="row"><span class="chip" style="background:${heat(rd)}">Driver ${rd==null?"–":f1(rd)}</span><span class="chip" style="background:${heat(rp)}">Pit ${rp==null?"–":f1(rp)}</span><span class="chip" style="background:${heat(rv)}">Vehicle ${rv==null?"–":f1(rv)}</span></div></button>`;
   }).join("");
-  return `<div class="row"><h2>${ui.year} Teams · ${teams.length}</h2></div>${emptyHint(d)}
+  const tsk=ui.teamSort||"wins",asc=ui.teamDir==="asc"||(tsk==="name"&&ui.teamDir!=="desc")||(tsk==="avgF"&&ui.teamDir!=="desc");
+  return `<div class="row"><h2>${ui.year} Teams · ${teams.length}</h2><span class="sp"></span>
+    <label class="fld">Series<select data-tt="ser"><option value="all">All series</option>${SERIES.map(([k,n])=>`<option value="${k}" ${ui.teamSer===k?"selected":""}>${esc((docs[docId(k,ui.year)]||{}).name||n)}</option>`).join("")}</select></label>
+    <label class="fld">Sort by<select data-tt="sort">${TSORTS.map(([v,n])=>`<option value="${v}" ${tsk===v?"selected":""}>${n}</option>`).join("")}</select></label>
+    <button class="btn" data-act="teamDir" title="Flip the sort order">${(tsk==="name"||tsk==="avgF")?(ui.teamDir==="desc"?"Z to A":"A to Z"):(ui.teamDir==="asc"?"Lowest first":"Highest first")}</button></div>${emptyHint(d)}
     ${teams.length?`<div class="grid3">${cards}</div>`:'<div class="card empty">Teams come from the Team column on your roster. Add drivers (or import .car files) and each team gets a card.</div>'}
     <p class="small muted">Teams with the same name in different series are combined. Open a team to see its cars, wins, history and average ratings, filter by series or season, and add the owner, base and notes.</p>`;
 }
@@ -889,7 +900,7 @@ function modalTeam(){
     <label class="fld" style="width:100%">Notes<textarea data-tm="notes" rows="2" style="text-transform:none;letter-spacing:0">${esc(prof.notes||"")}</textarea></label>
     <div class="tiles"><div><b>${tot.starts}</b><small>Starts</small></div><div><b>${tot.wins}</b><small>Wins</small></div><div><b>${tot.poles}</b><small>Poles</small></div><div><b>${tot.t5}</b><small>Top 5</small></div><div><b>${tot.t10}</b><small>Top 10</small></div><div><b>${tot.led}</b><small>Laps led</small></div><div><b>${tot.dnf}</b><small>DNF</small></div><div><b>${tot.starts?fmt(tot.sf/tot.starts):"–"}</b><small>Avg finish</small></div></div>
     <div class="tiles">${[["Driver avg",av[0]],["Pit crew avg",av[1]],["Vehicle avg",av[2]]].map(([n,v])=>`<div style="background:${heat(v)}"><b>${v==null?"–":f1(v)}</b><small>${n}</small></div>`).join("")}</div>
-    <div><h3>Cars</h3><div class="tw"><table><thead><tr>${yh}<th>#</th><th>Driver</th><th>Sponsor</th><th>Make</th><th class="n">Pos</th><th class="n">Pts</th><th class="n">Wins</th><th class="n">Top 5</th><th class="n">Avg fin</th></tr></thead><tbody>${rows.map(r=>`<tr>${ys(r)}<td><span class="car">${esc(r.x.num)}</span></td><td><a href="#" data-act="drv" data-id="${r.x.id}" data-s="${r.dd.series}" data-y="${r.dd.year}">${esc(r.x.name)}</a></td><td>${esc(r.x.sponsor)}</td><td>${esc(r.x.make)}</td><td class="n">${r.s.starts&&r.rk?r.rk:"–"}</td><td class="n"><b>${r.s.pts}</b></td><td class="n">${r.s.wins}</td><td class="n">${r.s.t5}</td><td class="n">${r.s.avgF!=null?fmt(r.s.avgF):"–"}</td></tr>`).join("")||'<tr><td colspan="11" class="muted" style="padding:12px">No cars.</td></tr>'}</tbody></table></div></div>
+    <div><h3>Cars</h3><div class="tw"><table><thead><tr>${yh}<th>#</th><th>Driver</th><th>Sponsor</th><th>Make</th><th class="n">Pos</th><th class="n">Starts</th><th class="n">Pts</th><th class="n">Wins</th><th class="n">Top 5</th><th class="n">Avg fin</th></tr></thead><tbody>${rows.map(r=>`<tr>${ys(r)}<td><span class="car">${esc(r.x.num)}</span></td><td><a href="#" data-act="drv" data-id="${r.x.id}" data-s="${r.dd.series}" data-y="${r.dd.year}">${esc(r.x.name)}</a></td><td>${esc(r.x.sponsor)}</td><td>${esc(r.x.make)}</td><td class="n">${r.s.starts&&r.rk?r.rk:"–"}</td><td class="n">${r.s.starts}</td><td class="n"><b>${r.s.pts}</b></td><td class="n">${r.s.wins}</td><td class="n">${r.s.t5}</td><td class="n">${r.s.avgF!=null?fmt(r.s.avgF):"–"}</td></tr>`).join("")||'<tr><td colspan="12" class="muted" style="padding:12px">No cars.</td></tr>'}</tbody></table></div></div>
     <div><h3>By season</h3><div class="tw"><table><thead><tr><th>Year</th>${multiH?"<th>Series</th>":""}<th class="n">Cars</th><th class="n">Starts</th><th class="n">Wins</th><th class="n">Poles</th><th class="n">Top 5</th><th class="n">Top 10</th><th class="n">Laps led</th></tr></thead><tbody>${hist}</tbody></table></div></div>
     <div><div class="row"><h3>${yf==="all"?"Race log":yf+" race log"}</h3></div>${logRows.length?`<div class="tw"><table><thead><tr>${yh}<th class="n">#</th><th>Race</th><th>Track</th><th>Driver</th><th class="n">Start</th><th class="n">Fin</th><th class="n">Led</th><th>Status</th></tr></thead><tbody>${logRows.join("")}</tbody></table></div>`:`<p class="muted">${ui.logWins?"No wins for this selection.":"No results yet for this selection."}</p>`}</div>
   </div></div>`;
@@ -1107,7 +1118,7 @@ function vDrivers(d0){
   const pill={Active:"ok",Inactive:"",Retired:"rk"};
   const rows=list.map(e=>{const one=z=>e.ent.map(z).join("");
     return `<tr><td class="name"><a href="#" data-act="drvAt" data-s="${e.ent[0].s}" data-id="${e.ent[0].id}" data-y="${e.year}">${esc(e.name)}</a></td><td><span class="pill ${pill[e.status]}">${e.status}</span></td><td class="n">${e.age===""?'<span class="muted">–</span>':esc(e.age)}</td>
-    <td>${one(z=>`<div><span class="car">${esc(z.num)}</span></div>`)}</td><td>${one(z=>`<div>${esc(z.team)||'<span class="muted">–</span>'}</div>`)}</td><td>${one(z=>`<div><a href="#" data-act="serAt" data-s="${z.s}" data-y="${z.year}">${esc(z.sn)}</a></div>`)}</td><td class="n">${e.year}</td></tr>`}).join("");
+    <td>${one(z=>`<div><span class="car">${esc(z.num)}</span></div>`)}</td><td>${one(z=>`<div>${teamLink(z)||'<span class="muted">–</span>'}</div>`)}</td><td>${one(z=>`<div><a href="#" data-act="serAt" data-s="${z.s}" data-y="${z.year}">${esc(z.sn)}</a></div>`)}</td><td class="n">${e.year}</td></tr>`}).join("");
   const seg=`<div class="seg" role="group" aria-label="Filter drivers">${[["all","All Drivers",cnt.all],["Active","Active Drivers",cnt.Active],["Inactive","Inactive Drivers",cnt.Inactive],["Retired","Retired Drivers",cnt.Retired]].map(([v,n,k])=>`<button data-act="drvFilter" data-v="${v}" class="${flt===v?"on":""}">${n} ${k}</button>`).join("")}</div>`;
   return `<div class="row"><h2>Drivers · ${list.length}</h2><span class="sp"></span><input type="text" id="filter" placeholder="Filter by name, team, #, series" value="${esc(ui.filter)}" style="width:240px"><button class="btn" data-act="ageLookup" title="Find real drivers' birth dates and fill in their ages for this season">Look up real ages</button></div>
     <div class="row">${seg}</div>
@@ -2332,6 +2343,7 @@ const ACT={
   clearRoster:()=>{const d=cur();d.drivers=[];d.races.forEach(r=>{r.res=[];r.done=false;r.cautions="";r.lc=""});(d.exh||[]).forEach(r=>{r.res=[];r.done=false});ui.filter="";touch(docId(d.series,d.year));toast("Roster cleared")},
   race:b=>{if(b.dataset.s&&docs[docId(b.dataset.s,+b.dataset.y)]&&(b.dataset.s!==ui.series||+b.dataset.y!==ui.year)){ui.series=b.dataset.s;ui.year=+b.dataset.y;render()}openRace(b.dataset.id);if(ui.modal){if(b.dataset.from)ui.modal.back={type:"driver",id:b.dataset.from};else if(b.dataset.fromteam)ui.modal.back={type:"team",team:b.dataset.fromteam}}return "nr"},
   logFilter:b=>{ui.logWins=b.dataset.v==="wins";renderModal();return "nr"},
+  teamDir:()=>{const k=ui.teamSort||"wins",low=(k==="name"||k==="avgF");ui.teamDir=low?(ui.teamDir==="desc"?"asc":"desc"):(ui.teamDir==="asc"?"desc":"asc")},
   drv:b=>{if(b.dataset.s&&docs[docId(b.dataset.s,+b.dataset.y)]&&(b.dataset.s!==ui.series||+b.dataset.y!==ui.year)){ui.series=b.dataset.s;ui.year=+b.dataset.y;render()}ui.modal={type:"driver",id:b.dataset.id,back:ui.modal&&ui.modal.type==="team"?ui.modal:undefined};renderModal();return "nr"},
   close:()=>{const bk=ui.modal&&ui.modal.back;ui.modal=bk||null;renderModal()},
   csv:()=>{exportCSV(cur());return "nr"},
@@ -2491,6 +2503,7 @@ document.addEventListener("change",e=>{
     if(t.dataset.sg){const v=Math.round(num(t.value));mo.adj[t.dataset.id+":"+t.dataset.sg]=v;t.value=v;t.classList.toggle("up",v>0);t.classList.toggle("dn",v<0);return}
     if(t.dataset.sgp){const k=t.dataset.sgp;mo[k]=k==="target"?+t.value:k==="age"?t.checked:Math.max(k==="min"?1:.5,num(t.value));if(k!=="target")mo.adj={};setTimeout(renderModal,0);return}}
   if(t.dataset.pt!==undefined&&ui.modal&&ui.modal.type==="points"&&d){const a=d.settings[ui.modal.key];a[+t.dataset.pt]=Math.max(0,num(t.value));touch(docId(d.series,d.year));return}
+  if(t.dataset.tt){if(t.dataset.tt==="ser")ui.teamSer=t.value;else{ui.teamSort=t.value;ui.teamDir=(t.value==="name"||t.value==="avgF")?"asc":"desc"}render();return}
   if(t.dataset.tf&&ui.modal&&ui.modal.type==="team"){const mo=ui.modal;mo[t.dataset.tf]=t.value==="all"?"all":t.dataset.tf==="yf"?+t.value:t.value;if(t.dataset.tf==="sf")delete mo.yf;renderModal();return}
   if(t.dataset.calpick!==undefined){if(/^\d{4}-\d\d$/.test(t.value)){ui.cal=t.value;ui.calFor=ui.year;render()}return}
   if(t.dataset.dfmt!==undefined){DFMT=t.value;try{localStorage.setItem("nr_datefmt",DFMT)}catch(e){}render();return}
