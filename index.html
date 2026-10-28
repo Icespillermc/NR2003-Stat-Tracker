@@ -743,7 +743,7 @@ function group(list,field){
   list.forEach(s=>{
     const k=(s[field]||"").trim();if(!k||!s.starts)return;
     let x=g.get(k);if(!x){x={name:k,drivers:0,starts:0,wins:0,poles:0,t5:0,t10:0,t20:0,led:0,dnf:0,sf:0,ss:0,pts:0,stw:0,stp:0,pp:0,dp:0,best:99};g.set(k,x)}
-    x.drivers++;["starts","wins","poles","t5","t10","t20","led","dnf","sf","ss","stw","stp","pp","dp"].forEach(f=>x[f]+=s[f]);x.best=Math.min(x.best,s.best);
+    x.drivers++;["starts","wins","poles","t5","t10","t20","led","dnf","sf","ss","stw","stp","pp","dp","pts"].forEach(f=>x[f]+=(s[f]||0));x.best=Math.min(x.best,s.best);
   });
   g.forEach(x=>{x.avgF=x.starts?x.sf/x.starts:null;x.avgS=x.ss?x.ss/x.starts:null;x.winp=x.starts?100*x.wins/x.starts:0});
   return [...g.values()];
@@ -795,7 +795,7 @@ function vStats(d){
   const k=ui.statSort,dir=ui.statDir;
   const val=s=>{const v=s[k];return v==null||(k==="best"&&v===99)?null:v};
   list=[...list].sort((a,b)=>{const x=val(a),y=val(b);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return (x-y)*dir||b.wins-a.wins});
-  const cols=STAT_COLS.filter(c=>!(c[0]==="pts"&&(career||ui.statMode!=="drivers"))&&!((c[0]==="stw"||c[0]==="stp"||c[0]==="pp")&&!(stg(d).on||(career&&docsFor(ui.series).some(x=>stg(x).on))))&&!(c[0]==="dp"&&!(duelPts(d).on||(career&&docsFor(ui.series).some(x=>duelPts(x).on)))));
+  const cols=STAT_COLS.filter(c=>!(c[0]==="pts"&&career&&ui.statMode==="drivers")&&!((c[0]==="stw"||c[0]==="stp"||c[0]==="pp")&&!(stg(d).on||(career&&docsFor(ui.series).some(x=>stg(x).on))))&&!(c[0]==="dp"&&!(duelPts(d).on||(career&&docsFor(ui.series).some(x=>duelPts(x).on)))));
   const top=(f,l)=>{const b=[...all].sort((a,c)=>c[f]-a[f])[0];return b&&b[f]>0?`<div class="card"><small>${l}</small><b>${esc(b.name)}</b><span class="muted small">${b[f]}</span></div>`:""};
   const leaders=ui.statMode==="drivers"?top("wins","Most wins")+top("poles","Most poles")+top("t5","Most top 5s")+top("led","Most laps led"):"";
   const nameHead=ui.statMode==="drivers"?"Driver":ui.statMode==="teams"?"Team":"Make";
