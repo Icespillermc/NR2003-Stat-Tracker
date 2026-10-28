@@ -271,6 +271,9 @@ const saveUP=a=>{try{localStorage.setItem(UP_KEY,JSON.stringify(a));return true}
 const ptKind=k=>k==="stagePts"||k==="duelPts"?"stage":"table";
 const userP=kind=>{const o={};loadUP().filter(p=>p&&p.kind===kind&&Array.isArray(p.pts)).forEach(p=>{o["u:"+p.n]=[p.n+" (saved)",p.pts]});return o};
 const presetsFor=k=>Object.assign({},ptKind(k)==="stage"?STAGE_PRESETS:PRESETS,userP(ptKind(k)));
+const qrCfg=d=>{const q=d.settings.qrd||{},n=Math.max(2,Math.min(6,Math.round(+q.rounds)||3)),sz=[];for(let i=0;i<n;i++)sz.push(Math.max(0,Math.round(+(q.sizes||[])[i])||0));return {on:!!q.on,n,sz}};
+const qrOf=(c,p)=>{let r=0;for(let k=1;k<c.n;k++)if(c.sz[k]>0&&p<=c.sz[k])r=k;return r};
+const qrLab=(c,rd)=>rd===c.n-1?"Final round":"Out in round "+(rd+1);
 const duelPts=d=>{const g=d.settings.duel||{};return {on:!!g.on,pts:d.settings.duelPts&&d.settings.duelPts.length?d.settings.duelPts:STAGE_DEF}};
 const PRESETS={
   y2026:["NASCAR 2026 (55 for a win, then 35, 34 … 1)",defaultTable()],
@@ -1474,9 +1477,9 @@ function modalDlu(){
 function gfxData(d,m){
   const r=mlist(d).find(x=>x.id===m.id)||{},am=ptsFor(d,m.rows,true),dv=id=>drvOf(d,id)||{num:"",name:"",team:""};
   const res=m.rows.filter(x=>x.d).slice().sort((a,b)=>num(a.f)-num(b.f)).map((x,i)=>{const v=dv(x.d);return {pos:i+1,s:x.s||"",num:v.num,name:v.name,team:v.team||"",laps:x.n||"",led:x.l||"",gap:(x.x&&x.x!=="Running"?x.x:(x.i||"")),pts:m.exh?"":(x.p!==""&&x.p!=null?x.p:(am.get(x.d)!=null?am.get(x.d):""))}});
-  const qual=(m.qrows||[]).filter(x=>x.d).slice().sort((a,b)=>(num(a.p)||999)-(num(b.p)||999)).map((x,i)=>{const v=dv(x.d);return {pos:i+1,num:v.num,name:v.name,team:v.team||"",time:x.t||""}});
+  const qcf=qrCfg(d),qual=(m.qrows||[]).filter(x=>x.d).slice().sort((a,b)=>(num(a.p)||999)-(num(b.p)||999)).map((x,i)=>{const v=dv(x.d);return {pos:i+1,num:v.num,name:v.name,team:v.team||"",time:x.t||"",rd:qrOf(qcf,i+1)}});
   const bits=[r.track,r.date?fmtDate(r.date):"",r.cautions!==""&&r.cautions!=null?r.cautions+" cautions":"",r.lc!==""&&r.lc!=null?r.lc+" lead changes":""].filter(Boolean);
-  return {type:"gfx",title:r.name||"Race",sub:bits.join("   ·   "),res,qual,series:d.series,sname:d.name,year:d.year,kind:m.tab==="qual"&&qual.length?"qual":(res.length?"res":"qual"),style:"light",font:"inter",top:0,cols:"auto"};
+  return {type:"gfx",title:r.name||"Race",sub:bits.join("   ·   "),res,qual,qr:qcf,series:d.series,sname:d.name,year:d.year,kind:m.tab==="qual"&&qual.length?"qual":(res.length?"res":"qual"),style:"light",font:"inter",top:0,cols:"auto"};
 }
 function modalGfx(){
   const m=ui.modal;
@@ -1568,7 +1571,7 @@ function gfxDraw(){
   const all=m.kind==="std"?m.std:m.kind==="qual"?m.qual:m.res,rows=m.top>0?all.slice(0,m.top):all;
   const two=m.cols==="2"||(m.cols==="auto"&&rows.length>24);
   const t=gfxTheme(m),acc=t.acc,onAcc=t.onAcc;gfxFontReady(m);
-  const W=two?1500:980,S=2,pad=44,headH=150,tH=36,rowH=56,foot=64,perCol=Math.max(1,two?Math.ceil(rows.length/2):rows.length),H=headH+tH+perCol*rowH+foot;
+  const W=two?1500:980,S=2,pad=44,headH=150,tH=36,rowH=56,foot=64,mr=m.kind==="qual"&&m.qr&&m.qr.on,divH=38,half=two?Math.ceil(rows.length/2):rows.length,chunks=two?[rows.slice(0,half),rows.slice(half)]:[rows],colItems=chunks.map(ch=>{const it=[];let pv=null;ch.forEach(r=>{if(mr&&r.rd!==pv){pv=r.rd;it.push({div:r.rd,n:ch.filter(z=>z.rd===r.rd).length})}it.push({r})});return it}),H=headH+tH+Math.max(rowH,...colItems.map(it=>it.reduce((a,z)=>a+(z.div!=null?divH:rowH),0)))+foot;
   cv.width=W*S;cv.height=H*S;const x=cv.getContext("2d");x.scale(S,S);
   const F=t.F;
   const cut=(t,w)=>{t=String(t==null?"":t);if(x.measureText(t).width<=w)return t;while(t.length>1&&x.measureText(t+"…").width>w)t=t.slice(0,-1);return t+"…"};
@@ -1582,13 +1585,17 @@ function gfxDraw(){
   const defs=m.kind==="std"?(two?[{h:"LEAD",k:"lead",w:100},{h:"PTS",k:"pts",w:80}]:[{h:"WINS",k:"wins",w:70},{h:"T5",k:"t5",w:56},{h:"T10",k:"t10",w:60},{h:"LEAD",k:"lead",w:110},{h:"PTS",k:"pts",w:84}]):m.kind==="qual"?[{h:"TIME",k:"time",w:150}]:two?[{h:"INTERVAL",k:"gap",w:150},{h:"PTS",k:"pts",w:60}]:[{h:"ST",k:"s",w:56},{h:"LAPS",k:"laps",w:70},{h:"LED",k:"led",w:62},{h:"INTERVAL",k:"gap",w:150},{h:"PTS",k:"pts",w:66}];
   const cols=defs.filter(c=>rows.some(r=>r[c.k]!==""&&r[c.k]!=null)),colW=two?(W-2*pad-40)/2:W-2*pad;
   for(let c=0;c<(two?2:1);c++){
-    const x0=pad+c*(colW+40),list=rows.slice(c*perCol,(c+1)*perCol);if(!list.length)continue;
+    const x0=pad+c*(colW+40),items=colItems[c]||[];if(!items.length)continue;
     let rx=x0+colW-10;const pos=[];for(let j=cols.length-1;j>=0;j--){pos[j]=rx;rx-=cols[j].w}
     x.font=`700 11px ${F}`;x.fillStyle=t.lab;x.textAlign="right";cols.forEach((cl,j)=>x.fillText(cl.h,pos[j],headH+24));
     x.textAlign="left";x.fillText("POS",x0+10,headH+24);x.fillText("CAR",x0+62,headH+24);x.fillText("DRIVER",x0+124,headH+24);
     const nameW=(cols.length?pos[0]-cols[0].w:x0+colW)-(x0+124)-12;
-    list.forEach((r,i)=>{
-      const y=headH+tH+i*rowH;
+    let yy=headH+tH,ri=0;
+    items.forEach(it=>{
+      if(it.div!=null){const fin=it.div===m.qr.n-1;rr(x0,yy+5,colW,divH-10,6);x.fillStyle=t.chip;x.globalAlpha=fin?1:.7;x.fill();x.globalAlpha=1;
+        if(fin){x.fillStyle=t.acc;x.fillRect(x0,yy+9,4,divH-18)}
+        x.fillStyle=fin?t.acc:t.mu;x.textAlign="left";x.font=`800 12px ${F}`;x.fillText((fin?"FINAL ROUND":"OUT IN ROUND "+(it.div+1))+"  ·  "+it.n+" CAR"+(it.n===1?"":"S"),x0+16,yy+divH/2+4);yy+=divH;return}
+      const r=it.r,i=ri++,y=yy;yy+=rowH;
       x.fillStyle=r.pos===1?acc:(i%2?t.b:t.a);x.globalAlpha=r.pos===1?.13:1;x.fillRect(x0,y,colW,rowH);x.globalAlpha=1;
       rr(x0+6,y+11,38,34,8);x.fillStyle=r.pos===1?acc:t.chip;x.fill();
       x.fillStyle=r.pos===1?onAcc:t.tx;x.font=`800 18px ${F}`;x.textAlign="center";x.fillText(r.pos,x0+25,y+34);
@@ -1645,6 +1652,10 @@ function vSetup(d){
       <label class="row" style="gap:8px"><input type="checkbox" class="chk" data-ed="duel" data-k="on" ${duelPts(d).on?"checked":""}> <span>Give points for finishing in each duel</span></label>
       ${duelPts(d).on?`<div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding-top:10px"><div><b>Duel points</b><div class="small muted">${esc(tableSummary(duelPts(d).pts))}</div></div><button class="btn" data-act="ptsEdit" data-k="duelPts">Choose positions and points…</button></div>
       <div class="small muted">Applies to Exhibitions of the type Duel once they have results. The points are added to the regular season standings and stats.</div>`:""}</div>
+    <div class="sect"><h3 style="font-size:17px">Qualifying rounds</h3>
+      <label class="row" style="gap:8px"><input type="checkbox" class="chk" data-ed="qrd" data-k="on" ${qrCfg(d).on?"checked":""}> <span>Qualifying has more than one round</span></label>
+      ${qrCfg(d).on?`<div class="fields"><label class="fld">Rounds<input type="number" min="2" max="6" data-ed="qrd" data-k="rounds" value="${qrCfg(d).n}" style="width:90px"></label>${qrCfg(d).sz.map((v,i)=>`<label class="fld">Cars in round ${i+1}<input type="number" min="0" data-ed="qrd" data-k="size" data-i="${i}" value="${v||""}" placeholder="${i?"":"All"}" style="width:100px"></label>`).join("")}</div>
+      <div class="small muted">Cars in each round is how many cars run in that round, so 36, 24 and 12 means the field runs round 1, the fastest 24 run round 2 and the fastest 12 run the final round. Leave round 1 empty for the whole field. Enter the final qualifying order on the Qualifying tab of a race as usual. Drivers are grouped by the last round they reached, and the groups show in the qualifying order and in the graphic.</div>`:""}</div>
     <label class="fld">Postseason format<select data-ed="postfmt" style="width:240px"><option value="none">None</option><option value="chase" ${ch.on?"selected":""}>Chase (cutoff and points reset)</option><option value="playoff" ${PO(d).on?"selected":""}>Elimination playoffs</option></select></label>
     ${ch.on?`<div class="fields">
       <label class="fld">After race #<input type="number" data-ed="chase" data-k="after" value="${ch.after}"></label>
@@ -1717,10 +1728,11 @@ function stagePane(d,m){
 }
 function qualPane(d,m){
   const opts=sel=>`<option value="">— choose —</option>`+[...d.drivers].sort((a,b)=>num(a.num)-num(b.num)).map(x=>`<option value="${x.id}" ${x.id===sel?"selected":""}>${esc(x.num)} · ${esc(x.name)}</option>`).join("");
-  const q=m.qrows||[];
-  return `<div class="help" style="margin-bottom:12px"><div class="row"><span class="small muted">Qualifying order and times. An NR2003 results file with a Qualifying session fills this in on its own. A file without a Race session works too, so you can add qualifying before the race.</span><span class="sp"></span><button class="btn sm pri" data-act="nrPickM" title="Reads the Qualifying session from an NR2003 results file. If the file also has a Race session, the results are filled in too.">Add from results file</button><button class="btn sm" data-act="qFromGrid" title="Use the Start column from the results tab">Fill from starting positions</button><button class="btn sm danger" data-act="qClear">Clear</button></div></div>
+  const q=m.qrows||[],qc=qrCfg(d);
+  return `<div class="help" style="margin-bottom:12px"><div class="row"><span class="small muted">${qc.on?`Rounds are on (${qc.n} rounds), set in Setup. `:""}Qualifying order and times. An NR2003 results file with a Qualifying session fills this in on its own. A file without a Race session works too, so you can add qualifying before the race.</span><span class="sp"></span><button class="btn sm pri" data-act="nrPickM" title="Reads the Qualifying session from an NR2003 results file. If the file also has a Race session, the results are filled in too.">Add from results file</button><button class="btn sm" data-act="qFromGrid" title="Use the Start column from the results tab">Fill from starting positions</button><button class="btn sm danger" data-act="qClear">Clear</button></div></div>
   <div class="tw"><table><thead><tr><th></th><th>Pos</th><th>Driver</th><th>Time or speed</th><th></th></tr></thead><tbody>
-  ${q.length?q.map((x,i)=>`<tr data-drop="qrow" data-key="${i}"><td class="grip" draggable="true" data-drag="qrow" data-key="${i}" title="Drag to reorder">⠿</td><td><input type="number" class="w-s" data-q="p" data-i="${i}" value="${x.p===""?"":x.p}"></td><td class="${x.d?"":"bad"}"><select data-q="d" data-i="${i}">${opts(x.d)}</select></td><td><input type="text" class="w-m" data-q="t" data-i="${i}" value="${esc(x.t)}"></td><td style="white-space:nowrap"><button class="btn sm" data-act="qUp" data-i="${i}" aria-label="Move up">↑</button> <button class="btn sm" data-act="qDn" data-i="${i}" aria-label="Move down">↓</button> <button class="btn sm danger" data-act="qDel" data-i="${i}" aria-label="Remove row">✕</button></td></tr>`).join(""):'<tr><td colspan="5" class="muted" style="padding:14px">No qualifying results yet. Add rows, or fill from the starting positions.</td></tr>'}
+  ${q.length?q.map((x,i)=>{const pv=i?(num(q[i-1].p)||i):0,pc=num(x.p)||i+1;const rdn=qc.on?qrOf(qc,pc):null,rdp=qc.on&&i?qrOf(qc,pv):null;const cnt=qc.on&&(i===0||rdn!==rdp)?q.filter((z,j)=>qrOf(qc,num(z.p)||j+1)===rdn).length:0;
+    return (qc.on&&(i===0||rdn!==rdp)?`<tr class="div"><td colspan="5">${qrLab(qc,rdn)} · ${cnt} car${cnt===1?"":"s"}</td></tr>`:"")+`<tr data-drop="qrow" data-key="${i}"><td class="grip" draggable="true" data-drag="qrow" data-key="${i}" title="Drag to reorder">⠿</td><td><input type="number" class="w-s" data-q="p" data-i="${i}" value="${x.p===""?"":x.p}"></td><td class="${x.d?"":"bad"}"><select data-q="d" data-i="${i}">${opts(x.d)}</select></td><td><input type="text" class="w-m" data-q="t" data-i="${i}" value="${esc(x.t)}"></td><td style="white-space:nowrap"><button class="btn sm" data-act="qUp" data-i="${i}" aria-label="Move up">↑</button> <button class="btn sm" data-act="qDn" data-i="${i}" aria-label="Move down">↓</button> <button class="btn sm danger" data-act="qDel" data-i="${i}" aria-label="Remove row">✕</button></td></tr>`}).join(""):'<tr><td colspan="5" class="muted" style="padding:14px">No qualifying results yet. Add rows, or fill from the starting positions.</td></tr>'}
   </tbody></table></div>`;
 }
 function modalRace(){
@@ -2482,6 +2494,11 @@ document.addEventListener("change",e=>{
   else if(ed==="doc"){d.name=val.trim()||d.name;touch(id);setTimeout(render,0);return}
   else if(ed==="set"){d.settings[k]=num(val)}
   else if(ed==="setstr"){d.settings[k]=val}
+  else if(ed==="qrd"){const q=d.settings.qrd=d.settings.qrd||{on:false,rounds:3,sizes:[0,24,12]};
+    if(k==="on"){q.on=!!val;if(!q.sizes||!q.sizes.length){q.sizes=[0,24,12];q.rounds=3}}
+    else if(k==="rounds"){const n=Math.max(2,Math.min(6,Math.round(num(val))||3));q.sizes=q.sizes||[];while(q.sizes.length<n){const pv=q.sizes[q.sizes.length-1]||0;q.sizes.push(Math.max(1,Math.round((pv||24)/2)))}q.sizes=q.sizes.slice(0,n);q.rounds=n}
+    else if(k==="size"){q.sizes=q.sizes||[];q.sizes[+t.dataset.i]=Math.max(0,Math.round(num(val)))}
+    touch(id);setTimeout(render,0);return}
   else if(ed==="duel"){d.settings.duel=Object.assign(d.settings.duel||{},{on:!!val});touch(id);setTimeout(render,0);return}
   else if(ed==="stg"){const g=d.settings.stages=d.settings.stages||{on:false,count:2};g[k]=t.type==="checkbox"?val:k==="pp"?Math.max(0,num(val)):Math.max(1,Math.min(8,Math.round(num(val))||2));touch(id);setTimeout(render,0);return}
   else if(ed==="chasestr"){d.settings.chase[k]=val}
