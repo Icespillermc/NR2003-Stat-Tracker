@@ -538,7 +538,7 @@ function standings(d,mode){
 const drvOf=(d,id)=>d.drivers.find(x=>x.id===id);
 const winnerOf=(d,r)=>{const x=(r.res||[]).find(z=>z.f===1);return x?drvOf(d,x.d):null};
 const poleOf=(d,r)=>{const x=(r.res||[]).find(z=>z.s===1);return x?drvOf(d,x.d):null};
-const carTag=x=>x?`<span class="car">${esc(x.num)}</span> ${dL(x.name,dd.series,dd.year)}`:'<span class="muted">–</span>';
+const carTag=x=>x?`<span class="car">${esc(x.num)}</span> ${esc(x.name)}`:'<span class="muted">–</span>';
 
 /* ---------- views ---------- */
 function head(){
