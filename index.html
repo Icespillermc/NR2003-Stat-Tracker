@@ -60,6 +60,7 @@ select{padding-right:4px}
 main{padding-top:18px;display:flex;flex-direction:column;gap:18px}
 /* generic */
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.col{display:flex;flex-direction:column;align-items:flex-start}
 .sp{flex:1}
 .muted{color:var(--muted)} .small{font-size:12.5px}
 .btn{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:6px 12px;font-weight:600}
@@ -346,7 +347,7 @@ const sidOf=(sl,id)=>sl==="main"?id:sl+"~"+id;
 const parseSid=sid=>{const i=sid.indexOf("~");return i<0?["main",sid]:[sid.slice(0,i),sid.slice(i+1)]};
 const slotName=()=>(saves.find(x=>x.id===slot)||saves[0]||{name:"Main league"}).name;
 let docs={},lastJson={},pending=new Set(),db=null,dl=null,ready=false,saveState="",writing=false,flushTimer=null;
-let ui={series:"cup",year:null,view:"overview",statMode:"drivers",statScope:"season",statSort:"wins",statDir:-1,rateSort:"avgd",stFilter:"post",poRound:null,rosSort:"",rosDir:1,exScope:"season",rateDir:-1,rateGroup:"d",showAll:false,sched:false,filter:"",modal:null};
+let ui={sim:{variance:50,dnf:8,field:""},series:"cup",year:null,view:"overview",statMode:"drivers",statScope:"season",statSort:"wins",statDir:-1,rateSort:"avgd",stFilter:"post",poRound:null,rosSort:"",rosDir:1,exScope:"season",rateDir:-1,rateGroup:"d",showAll:false,sched:false,filter:"",modal:null};
 try{const u=JSON.parse(localStorage.getItem("nr_ui")||"{}");["series","year","view"].forEach(k=>{if(u[k]!=null)ui[k]=u[k]})}catch(e){}
 const saveUi=()=>{try{localStorage.setItem("nr_ui",JSON.stringify({series:ui.series,year:ui.year,view:ui.view}))}catch(e){}};
 
@@ -643,6 +644,7 @@ function vSchedule(d){
   const hd=ed?"<th></th><th>#</th><th>Date</th><th>Race</th><th>Track</th><th>Type</th><th>Miles</th><th>Laps</th><th colspan=2></th>":"<th></th><th class=n>#</th><th>Date</th><th>Race</th><th>Track</th><th>Type</th><th class=n>Laps</th><th>Winner</th><th>Pole</th><th></th>";
   return `<div class="row"><h2>${esc(d.name)} Schedule</h2><span class="sp"></span>
     <button class="btn pri" data-act="nrPick">Import NR2003 results</button><input type="file" id="nrFile" accept=".html,.htm,text/html" multiple hidden>
+    <button class="btn" data-act="genOpen" title="Build a schedule from the tracks in the Tracks tab">Generate schedule</button>
     <button class="btn" data-act="iniPick" title="Import a season schedule from an NR2003 .ini file">Import schedule (.ini)</button><input type="file" id="iniFile" accept=".ini,.txt" hidden>
     ${d.races.length?'<button class="btn danger" data-act="clearSched" data-confirm="1" title="Removes every race and its results. Drivers stay.">Clear schedule</button>':""}${d.races.length?'<button class="btn" data-act="rbulk" title="Change laps or shuffle the order of several races at once">Bulk edit races</button>':""}<button class="btn ${ed?"pri":""}" data-act="schedEdit">${ed?"Done editing":"Edit schedule"}</button>${ed?'<button class="btn" data-act="addrace">+ Add race</button>':""}</div>
     ${emptyHint(d)}
@@ -1015,10 +1017,16 @@ function trackIndex(scope){
     const key=normTrack(nm)||nm.toLowerCase();let t=m.get(key);
     if(!t){t={key,name:nm,type:"",len:"",events:[]};m.set(key,t)}
     if(!t.type&&r.type)t.type=r.type;if(!t.len&&r.len)t.len=r.len;
+    if(!t.laps&&r.laps)t.laps=r.laps;
     t.events.push({dd,r,i});
   }));
+  list.forEach(dd=>Object.entries(dd.trackProfiles||{}).forEach(([key,p])=>{
+    let t=m.get(key);if(!t){t={key,name:p.name||key,type:"",len:"",events:[]};m.set(key,t)}
+    t.prof=t.prof||p;if(p.type)t.type=p.type;if(p.len)t.len=p.len;if(p.laps)t.laps=p.laps}));
   return [...m.values()];
 }
+function profFor(key){const d=cur();let p=d&&d.trackProfiles&&d.trackProfiles[key];if(p)return p;
+  for(const x of Object.values(docs)){if(x&&x.trackProfiles&&x.trackProfiles[key])return x.trackProfiles[key]}return null}
 function trackDriverStats(t){
   const m=new Map();
   t.events.forEach(({dd,r})=>{const nm=new Map(dd.drivers.map(z=>[z.id,z]));(r.res||[]).forEach(x=>{
@@ -1031,13 +1039,21 @@ function vTracks(d){
   const scope=ui.trkScope||"series",tr=trackIndex(scope);
   const sorted=[...tr].sort((a,b)=>b.events.length-a.events.length||a.name.localeCompare(b.name));
   const body=sorted.map(t=>{
-    const last=t.events[t.events.length-1],lw=winnerOf(last.dd,last.r),st=trackDriverStats(t),top=st[0];
+    const last=t.events[t.events.length-1],lw=last?winnerOf(last.dd,last.r):null,st=trackDriverStats(t),top=st[0];
     return `<tr class="click" data-act="track" data-k="${esc(t.key)}"><td class="name"><a href="#" data-act="track" data-k="${esc(t.key)}"><b>${esc(t.name)}</b></a></td><td>${esc(t.type)}${t.len?` <span class="muted">${esc(t.len)} mi</span>`:""}</td><td class="n">${t.events.length}</td>
-      <td>${lw?carTag(lw):""} <span class="muted small">${last.dd.year}${scope==="all"?" · "+esc(last.dd.name):""}</span></td><td>${top&&top.wins?`${esc(top.name)} <span class="muted small">${top.wins} win${top.wins>1?"s":""}</span>`:""}</td></tr>`}).join("");
-  return `<div class="row"><h2>Tracks</h2><span class="sp"></span><div class="seg">${[["series",esc(d.name)],["all","All series"]].map(([v,n])=>`<button data-act="trkScope" data-v="${v}" class="${scope===v?"on":""}">${n}</button>`).join("")}</div></div>
-    <div class="card tw">${sorted.length?`<table><thead><tr><th>Track</th><th>Type</th><th class="n">Races</th><th>Latest winner</th><th>Most wins</th></tr></thead><tbody>${body}</tbody></table>`:'<div class="empty">Tracks appear once you enter results for races that have a track name on the schedule.</div>'}</div>
-    <p class="small muted">Open a track to see every race held there and how each driver has done.</p>`;
+      <td>${lw?carTag(lw):""} <span class="muted small">${last?last.dd.year+(scope==="all"?" · "+esc(last.dd.name):""):"No races yet"}</span></td><td>${top&&top.wins?`${esc(top.name)} <span class="muted small">${top.wins} win${top.wins>1?"s":""}</span>`:""}</td></tr>`}).join("");
+  return `<div class="row"><h2>Tracks</h2><span class="sp"></span><button class="btn" data-act="genOpen" title="Build a schedule from the tracks below">Generate schedule</button><div class="seg">${[["series",esc(d.name)],["all","All series"]].map(([v,n])=>`<button data-act="trkScope" data-v="${v}" class="${scope===v?"on":""}">${n}</button>`).join("")}</div></div>
+    <div class="row" style="gap:8px"><input type="text" id="ntkIn" placeholder="New track name" style="min-width:220px"><button class="btn pri" data-act="ntkAdd">+ Create track profile</button></div>
+    <div class="card tw">${sorted.length?`<table><thead><tr><th>Track</th><th>Type</th><th class="n">Races</th><th>Latest winner</th><th>Most wins</th></tr></thead><tbody>${body}</tbody></table>`:'<div class="empty">Tracks appear once you enter results for races that have a track name on the schedule, or create a track profile above.</div>'}</div>
+    <p class="small muted">Open a track to see every race held there, how each driver has done, and to edit its profile.</p>`;
 }
+function trackProfBox(t){
+  const p=t.prof||profFor(t.key)||{},lk=trackLap(cur(),{track:t.name,type:p.type||t.type,len:p.len||t.len}),f=(k,l,w,ph,tp)=>`<label class="col" style="gap:3px"><span class="small muted">${l}</span><input type="${tp||"text"}" ${tp==="number"?'step="any"':""} class="${w}" data-tp="${k}" value="${esc(p[k]!=null?p[k]:"")}" placeholder="${esc(ph||"")}"></label>`;
+  return `<div class="card" style="padding:12px"><div class="row" style="gap:12px;align-items:flex-end;flex-wrap:wrap"><h3 style="margin:0">Track profile</h3><span class="sp"></span>${t.prof&&!t.events.length?'<button class="btn sm danger" data-act="tpDel" data-confirm="1">Delete profile</button>':""}</div>
+  <div class="row" style="gap:12px;margin-top:10px;flex-wrap:wrap;align-items:flex-end"><label class="col" style="gap:3px"><span class="small muted">Type</span><select data-tp="type"><option value=""></option>${TYPES.map(x=>`<option ${(p.type||t.type)===x?"selected":""}>${x}</option>`).join("")}</select></label>
+  ${f("len","Length (mi)","w-s",t.len,"number")}${f("laps","Race laps","w-s",t.laps,"number")}${f("avg","Avg lap (sec)","w-s",String(lk.v),"number")}${f("loc","Location","w-l","City, state")}</div>
+  <label class="col" style="gap:3px;margin-top:10px"><span class="small muted">Notes</span><textarea data-tp="notes" rows="2" style="width:100%" placeholder="Surface, banking, quirks…">${esc(p.notes||"")}</textarea></label>
+  <div class="small muted" style="margin-top:6px">Avg lap shows the ${lk.src==="yours"?"saved":lk.src} value. Type your own to override it. It's used by the race simulator.</div></div>`}
 function modalTrack(){
   const t=trackIndex(ui.modal.scope||"series").find(x=>x.key===ui.modal.key);if(!t)return "";
   const st=trackDriverStats(t),all=ui.modal.scope==="all";
@@ -1046,6 +1062,7 @@ function modalTrack(){
     return `<tr><td>${dd.year}</td>${all?`<td>${esc(dd.name)}</td>`:""}<td class="n">${i+1}</td><td>${esc(r.name)}</td><td>${carTag(winnerOf(dd,r))}</td><td>${carTag(poleOf(dd,r))}</td><td>${nm(p2)?esc(nm(p2).name):"–"}</td><td>${nm(p3)?esc(nm(p3).name):"–"}</td><td class="n">${r.cautions!==""&&r.cautions!=null?esc(r.cautions):"–"}</td></tr>`}).join("");
   return `<div class="dlg" role="dialog" aria-label="Track" data-s="${ui.series}"><header><h3 style="font-size:26px">${esc(t.name)}</h3>${t.type?`<span class="pill">${esc(t.type)}</span>`:""}${t.len?`<span class="muted">${esc(t.len)} mi</span>`:""}<span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body" style="display:flex;flex-direction:column;gap:16px">
+    ${trackProfBox(t)}
     <div class="tiles"><div><b>${t.events.length}</b><small>Races held</small></div><div><b>${winners}</b><small>Different winners</small></div><div><b>${st.filter(x=>x.wins>0).length}</b><small>Drivers with a win</small></div><div><b>${st.length}</b><small>Drivers who raced</small></div></div>
     <div><h3>Race results</h3><div class="tw"><table><thead><tr><th>Year</th>${all?"<th>Series</th>":""}<th class="n">Race #</th><th>Race</th><th>Winner</th><th>Pole</th><th>2nd</th><th>3rd</th><th class="n">Cautions</th></tr></thead><tbody>${ev}</tbody></table></div></div>
     <div><h3>Drivers at ${esc(t.name)}</h3><div class="tw"><table><thead><tr><th>Driver</th><th class="n">Starts</th><th class="n">Wins</th><th class="n">Poles</th><th class="n">Top 5</th><th class="n">Top 10</th><th class="n">Laps led</th><th class="n">Avg fin</th><th class="n">Best</th></tr></thead><tbody>${st.map(x=>`<tr><td class="name"><span class="car">${esc(x.num)}</span> ${esc(x.name)}</td><td class="n">${x.starts}</td><td class="n"><b>${x.wins}</b></td><td class="n">${x.poles}</td><td class="n">${x.t5}</td><td class="n">${x.t10}</td><td class="n">${x.led}</td><td class="n">${fmt(x.sf/x.starts)}</td><td class="n">${x.best}</td></tr>`).join("")}</tbody></table></div></div>
@@ -1407,6 +1424,24 @@ function modalTeamRatings(){
   <footer><span class="small muted">Matched by team name in the season you pick.</span><span class="sp"></span><button class="btn pri" data-act="tmApply" data-confirm="1" ${teams.length?"":"disabled"}>Apply to all drivers</button></footer></div>`;
 }
 /* ---------- bulk edit ratings ---------- */
+function genTracks(){return trackIndex(ui.modal.scope||"series").sort((a,b)=>a.name.localeCompare(b.name))}
+function modalGen(){
+  const m=ui.modal,d=cur(),tr=genTracks(),n=tr.filter(t=>m.sel[t.key]).length,N=Math.max(0,Math.round(num(m.n)));
+  const rows=tr.map(t=>`<label class="row" style="gap:8px;padding:3px 0"><input type="checkbox" class="chk" data-gk="${esc(t.key)}" ${m.sel[t.key]?"checked":""}> <b>${esc(t.name)}</b> <span class="muted small">${esc(t.type)}${t.len?" · "+esc(t.len)+" mi":""}${t.laps?" · "+esc(t.laps)+" laps":""}</span></label>`).join("");
+  const rep=m.mode==="replace"&&d.races.length;
+  return `<div class="dlg" role="dialog" aria-label="Generate schedule" data-s="${ui.series}" style="max-width:720px"><header><h3>Generate schedule</h3><span class="muted">${esc(d.name)} · ${d.year}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body" style="display:flex;flex-direction:column;gap:14px">
+  <div class="row" style="gap:14px;flex-wrap:wrap;align-items:flex-end">
+   <label class="col" style="gap:3px"><span class="small muted">Number of races</span><input type="number" class="w-s" min="1" data-gp="n" value="${N||""}"></label>
+   <label class="col" style="gap:3px"><span class="small muted">Order</span><select data-gp="order"><option value="list" ${m.order==="list"?"selected":""}>A–Z, repeating</option><option value="shuffle" ${m.order==="shuffle"?"selected":""}>Shuffled</option></select></label>
+   <label class="col" style="gap:3px"><span class="small muted">Race name</span><input type="text" class="w-l" data-gp="tmpl" value="${esc(m.tmpl)}" placeholder="{track}"></label>
+   <label class="col" style="gap:3px"><span class="small muted">First race date</span><input type="date" data-gp="start" value="${esc(m.start||"")}"></label>
+   <label class="col" style="gap:3px"><span class="small muted">Days between</span><input type="number" class="w-s" min="1" data-gp="gap" value="${esc(m.gap)}"></label>
+   <label class="col" style="gap:3px"><span class="small muted">Existing races</span><select data-gp="mode"><option value="append" ${m.mode!=="replace"?"selected":""}>Add to the end</option><option value="replace" ${m.mode==="replace"?"selected":""}>Replace the schedule</option></select></label></div>
+  <div><div class="row" style="gap:8px"><h3 style="margin:0">Tracks (${n} of ${tr.length})</h3><span class="sp"></span><button class="btn sm" data-act="genAll" data-v="1">Select all</button><button class="btn sm" data-act="genAll" data-v="0">Select none</button></div>
+   <div class="card" style="padding:8px 12px;max-height:280px;overflow:auto;margin-top:8px">${rows||'<div class="empty">No tracks yet. Create a track profile on the Tracks tab first.</div>'}</div></div>
+  <div class="small muted">${n&&N?`${N} race${N===1?"":"s"} across ${n} track${n===1?"":"s"}${N>n?`. Tracks repeat after each pass through the list`:""}. Use {track} and {n} in the race name. Type, length and laps come from the track profile.`:"Pick at least one track and a number of races."}${rep?" Replacing removes every current race and its results.":""}</div></div>
+  <footer><span class="sp"></span><button class="btn pri" data-act="genGo" ${rep?'data-confirm="1"':""}>${rep?"Replace schedule":"Generate"}</button></footer></div>`}
 function modalBulk(){
   const d=cur(),m=ui.modal,ds=[...d.drivers].sort((a,b)=>num(a.num)-num(b.num)||a.name.localeCompare(b.name));
   const teams=[...new Set(d.drivers.map(teamName))].sort();
@@ -1556,7 +1591,7 @@ function modalDlu(){
 }
 function gfxData(d,m){
   const r=mlist(d).find(x=>x.id===m.id)||{},am=ptsFor(d,m.rows,true),dv=id=>drvOf(d,id)||{num:"",name:"",team:""};
-  const res=m.rows.filter(x=>x.d).slice().sort((a,b)=>num(a.f)-num(b.f)).map((x,i)=>{const v=dv(x.d);return {pos:i+1,s:x.s||"",num:v.num,name:v.name,team:v.team||"",laps:x.n||"",led:x.l||"",gap:(x.x&&x.x!=="Running"?x.x:(x.i||"")),pts:m.exh?"":(x.p!==""&&x.p!=null?x.p:(am.get(x.d)!=null?am.get(x.d):""))}});
+  const res=m.rows.filter(x=>x.d).slice().sort((a,b)=>num(a.f)-num(b.f)).map((x,i)=>{const v=dv(x.d);return {pos:i+1,s:x.s||"",num:v.num,name:v.name,team:v.team||"",laps:x.n||"",led:x.l||"",gap:(x.x&&x.x!=="Running"?x.x:(x.i||(num(x.f)===1?"Leader":""))),pts:m.exh?"":(x.p!==""&&x.p!=null?x.p:(am.get(x.d)!=null?am.get(x.d):""))}});
   const qcf=qrCfg(d),qual=(m.qrows||[]).filter(x=>x.d).slice().sort((a,b)=>(num(a.p)||999)-(num(b.p)||999)).map((x,i)=>{const v=dv(x.d);return {pos:i+1,num:v.num,name:v.name,team:v.team||"",time:x.t||"",rd:qrOf(qcf,i+1)}});
   const bits=[r.track,r.date?fmtDate(r.date):"",r.cautions!==""&&r.cautions!=null?r.cautions+" cautions":"",r.lc!==""&&r.lc!=null?r.lc+" lead changes":""].filter(Boolean);
   return {type:"gfx",title:r.name||"Race",sub:bits.join("   ·   "),res,qual,qr:qcf,series:d.series,sname:d.name,year:d.year,kind:m.tab==="qual"&&qual.length?"qual":(res.length?"res":"qual"),style:"light",font:"inter",top:0,cols:"auto"};
@@ -1809,29 +1844,91 @@ function stagePane(d,m){
 function qualPane(d,m){
   const opts=sel=>`<option value="">— choose —</option>`+[...d.drivers].sort((a,b)=>num(a.num)-num(b.num)).map(x=>`<option value="${x.id}" ${x.id===sel?"selected":""}>${esc(x.num)} · ${esc(x.name)}</option>`).join("");
   const q=m.qrows||[],qc=qrCfg(d);
-  return `<div class="help" style="margin-bottom:12px"><div class="row"><span class="small muted">${qc.on?`Rounds are on (${qc.n} rounds), set in Setup. `:""}Qualifying order and times. An NR2003 results file with a Qualifying session fills this in on its own. A file without a Race session works too, so you can add qualifying before the race.</span><span class="sp"></span><button class="btn sm pri" data-act="nrPickM" title="Reads the Qualifying session from an NR2003 results file. If the file also has a Race session, the results are filled in too.">Add from results file</button><button class="btn sm" data-act="qFromGrid" title="Use the Start column from the results tab">Fill from starting positions</button><button class="btn sm danger" data-act="qClear">Clear</button></div></div>
+  return simBox(d,m,"qual")+`<div class="help" style="margin-bottom:12px"><div class="row"><span class="small muted">${qc.on?`Rounds are on (${qc.n} rounds), set in Setup. `:""}Qualifying order and times. An NR2003 results file with a Qualifying session fills this in on its own. A file without a Race session works too, so you can add qualifying before the race.</span><span class="sp"></span><button class="btn sm pri" data-act="nrPickM" title="Reads the Qualifying session from an NR2003 results file. If the file also has a Race session, the results are filled in too.">Add from results file</button><button class="btn sm" data-act="qFromGrid" title="Use the Start column from the results tab">Fill from starting positions</button><button class="btn sm danger" data-act="qClear">Clear</button></div></div>
   <div class="tw"><table><thead><tr><th></th><th>Pos</th><th>Driver</th><th>Time or speed</th><th></th></tr></thead><tbody>
   ${q.length?q.map((x,i)=>{const pv=i?(num(q[i-1].p)||i):0,pc=num(x.p)||i+1;const rdn=qc.on?qrOf(qc,pc):null,rdp=qc.on&&i?qrOf(qc,pv):null;const cnt=qc.on&&(i===0||rdn!==rdp)?q.filter((z,j)=>qrOf(qc,num(z.p)||j+1)===rdn).length:0;
     return (qc.on&&(i===0||rdn!==rdp)?`<tr class="div"><td colspan="5">${qrLab(qc,rdn)} · ${cnt} car${cnt===1?"":"s"}</td></tr>`:"")+`<tr data-drop="qrow" data-key="${i}"><td class="grip" draggable="true" data-drag="qrow" data-key="${i}" title="Drag to reorder">⠿</td><td><input type="number" class="w-s" data-q="p" data-i="${i}" value="${x.p===""?"":x.p}"></td><td class="${x.d?"":"bad"}"><select data-q="d" data-i="${i}">${opts(x.d)}</select></td><td><input type="text" class="w-m" data-q="t" data-i="${i}" value="${esc(x.t)}"></td><td style="white-space:nowrap"><button class="btn sm" data-act="qUp" data-i="${i}" aria-label="Move up">↑</button> <button class="btn sm" data-act="qDn" data-i="${i}" aria-label="Move down">↓</button> <button class="btn sm danger" data-act="qDel" data-i="${i}" aria-label="Remove row">✕</button></td></tr>`}).join(""):'<tr><td colspan="5" class="muted" style="padding:14px">No qualifying results yet. Add rows, or fill from the starting positions.</td></tr>'}
   </tbody></table></div>`;
 }
+const TRACK_LAPS=[[/roval/,90],[/daytona.*(road|rc)/,100],[/daytona/,48],[/talladega/,50.5],[/charlotte/,30.5],[/atlanta/,29.3],[/texas/,30],[/vegas/,30.5],[/kansas/,30.5],[/homestead|miami/,31.5],[/michigan/,40],[/pocono/,54],[/indianapolis road/,80],[/indianapolis|indy/,51.5],[/darlington/,30],[/dover/,23.5],[/phoenix/,27.8],[/richmond/,22.5],[/bristol/,16],[/martinsville/,20.5],[/new hampshire|loudon/,29.5],[/iowa/,21.5],[/gateway|st\.? louis|madison/,32.5],[/nashville/,31],[/milwaukee/,29.3],[/rockingham/,24.5],[/north wilkesboro|wilkesboro/,20.3],[/sonoma|infineon|sears point/,82],[/watkins glen/,73],[/austin|cota|americas/,140],[/road america|elkhart/,120],[/chicago/,90],[/mosport|mont.?tremblant/,85],[/bowman gray/,14]];
+const trackKey=r=>String((r&&(r.track||r.type))||"").trim().toLowerCase();
+function trackLap(d,r){
+  const k=trackKey(r),mine=(d.lapTimes&&d.lapTimes[k])||Object.values(docs).map(x=>x&&x.lapTimes&&x.lapTimes[k]).find(Boolean);
+  if(mine>0)return {v:mine,src:"yours"};
+  const pk=normTrack(r&&r.track),pf=pk&&profFor(pk);if(pf&&num(pf.avg)>0)return {v:num(pf.avg),src:"yours"};
+  const nm=String((r&&r.track)||"").toLowerCase(),hit=TRACK_LAPS.find(([re])=>re.test(nm));
+  if(hit)return {v:hit[1],src:"lookup"};
+  const t=String((r&&r.type)||"").toLowerCase(),len=num(r&&r.len)||(/super/.test(t)?2.5:/inter/.test(t)?1.5:/short/.test(t)?.75:/road/.test(t)?2.2:1),mph=/super/.test(t)?185:/inter/.test(t)?165:/short/.test(t)?100:/road/.test(t)?82:115;
+  return {v:Math.round(len/mph*36000)/10,src:"estimate"};
+}
+const SIM_FAIL=["Crash","Engine","Transmission","Suspension","Overheating","Brakes","Electrical","Handling"];
+const simG=()=>{let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random())};
+const simR=(x,c)=>{const v=rg(x,c);return v?v.a+(v.b-v.a)*Math.random():50};
+const simMean=(x,cs)=>cs.reduce((a,c)=>a+simR(x,c),0)/cs.length;
+function simField(d){let f=d.drivers.filter(x=>!x.retired);const n=Math.round(num(ui.sim.field));if(n>0&&n<f.length){f=f.slice().sort(()=>Math.random()-.5).slice(0,n)}return f}
+function simTrack(r){const t=String((r&&r.type)||"").toLowerCase();return /super/.test(t)?["ss"]:/inter/.test(t)?["spd"]:/short/.test(t)?["st"]:/road/.test(t)?["rd"]:["st","spd"]}
+function simScores(d,r,field,mode){
+  const tr=simTrack(r),V=Math.max(0,num(ui.sim.variance)),out=[];
+  field.forEach(x=>{
+    const track=simMean(x,tr),car=simMean(x,["vae","vch","ven"]),agg0=simR(x,"agg"),con=rmean(x,"con")??50;
+    const pace=mode==="qual"?.30*track+.30*simR(x,"qua")+.35*car+.05*agg0:.35*track+.15*simR(x,"fin")+.10*agg0+.30*car+.10*simMean(x,["pcc","pcs","pcg"]);
+    const sd=(V/50)*10*(1.4-con/100);
+    out.push({x,pace,score:pace+simG()*sd,rel:simMean(x,["vre"]),agg:agg0});
+  });
+  return out;
+}
+function simQual(d,r,field){
+  const sc=simScores(d,r,field,"qual").sort((a,b)=>b.score-a.score),avgLap=trackLap(d,r).v,mean=sc.reduce((a,z)=>a+z.score,0)/sc.length;
+  return sc.map((z,i)=>({d:z.x.id,p:i+1,t:(avgLap*(1-(z.score-mean)/50*.012)).toFixed(3)}));
+}
+function simRace(d,r,m){
+  const field=simField(d),L=Math.max(10,Math.round(num(r.laps))||200),dnfR=Math.max(0,num(ui.sim.dnf))/100;
+  if(field.length<2)return null;
+  let q=(m.qrows||[]).filter(z=>z.d&&field.some(x=>x.id===z.d)).sort((a,b)=>(num(a.p)||999)-(num(b.p)||999)),made=false;
+  if(q.length<field.length){const have=new Set(q.map(z=>z.d));if(!q.length){q=simQual(d,r,field);made=true}else{const rest=field.filter(x=>!have.has(x.id)).sort(()=>Math.random()-.5);q=q.concat(rest.map((x,i)=>({d:x.id,p:q.length+i+1,t:""})))}}
+  const start=new Map(q.map((z,i)=>[z.d,i+1])),n=field.length;
+  const sc=simScores(d,r,field,"race");
+  sc.forEach(z=>{z.score+=(n-start.get(z.x.id))/(n-1)*3;z.dnf=Math.random()<dnfR*(.5+(100-z.rel)/100)*(.8+z.agg/250);z.laps=z.dnf?Math.max(1,Math.floor(L*(.05+.9*Math.pow(Math.random(),.8)))):L});
+  const fin=sc.filter(z=>!z.dnf).sort((a,b)=>b.score-a.score),out=sc.filter(z=>z.dnf);
+  const downs=fin.map((z,k)=>k===0?0:Math.floor(Math.pow(k/fin.length,2)*3*Math.random()*(1+num(ui.sim.variance)/100))).sort((a,b)=>a-b);
+  const gs=trackLap(d,r).v/30;let gap=0;
+  fin.forEach((z,k)=>{const down=downs[k];z.laps=Math.max(1,L-down);if(k===0)z.i="Leader";else if(down>0)z.i="+"+down+" lap"+(down===1?"":"s");else{gap+=-Math.log(1-Math.random())*(1.2+(k/fin.length)*1.5)*gs;z.i="+"+gap.toFixed(3)}});
+  out.forEach(z=>{z.i="DNF";z.st=SIM_FAIL[Math.floor(Math.random()*SIM_FAIL.length)]});
+  const ord=sc.slice().sort((a,b)=>b.laps-a.laps||(a.dnf?1:0)-(b.dnf?1:0)||b.score-a.score);
+  const top=Math.max(...sc.map(z=>z.score));let tot=0;sc.forEach(z=>{z.w=Math.exp((z.score-top)/6)*Math.pow(Math.random(),2)*(z.dnf?z.laps/L:1);tot+=z.w});
+  let used=0;sc.forEach(z=>{z.led=Math.min(z.laps,Math.floor(L*z.w/tot));used+=z.led});
+  const win=ord[0],rem=L-used;if(rem>0)win.led=Math.min(win.laps,win.led+rem);
+  const rows=ord.map((z,i)=>({d:z.x.id,f:i+1,s:start.get(z.x.id),l:z.led||0,n:z.laps,x:z.dnf?z.st:"Running",i:z.i||"",p:""}));
+  let stgR=null;const sg=stg(d);
+  if(!m.exh&&sg.on){const N=sg.pts.length;stgR=Array.from({length:sg.count},(_,k)=>{const end=Math.floor(L*(k+1)/(sg.count+1));return sc.filter(z=>z.laps>=end).map(z=>({id:z.x.id,v:z.score+simG()*(num(ui.sim.variance)/50)*5})).sort((a,b)=>b.v-a.v).slice(0,N).map(z=>z.id)})}
+  return {rows,q:made?q:null,stg:stgR};
+}
+const simBox=(d,m,what)=>{const o=ui.sim,has=what==="race"?(m.rows||[]).length:(m.qrows||[]).length;
+  return `<div class="help" style="margin-bottom:12px"><div class="row" style="gap:12px;align-items:flex-end"><b>Simulate from ratings</b>
+  <label class="fld" title="0 means the best ratings always win. 100 means very unpredictable. Each driver's rating range (like 60–80) is also sampled for every simulation.">Variance (0 to 100)<input type="number" min="0" max="100" step="5" data-sim="variance" value="${o.variance}" style="width:90px"></label>
+  ${what==="race"?`<label class="fld">DNF rate %<input type="number" min="0" max="100" step="1" data-sim="dnf" value="${o.dnf}" style="width:80px"></label>`:""}
+  ${(()=>{const r=mlist(d).find(x=>x.id===m.id),tl=r?trackLap(d,r):{v:"",src:""};return `<label class="fld" title="${tl.src==="yours"?"Your own value for this track. Clear the box to go back to the built-in one.":tl.src==="lookup"?"Typical average lap for this track. You can change it.":"Estimated from the track type and length. You can change it."}">Avg lap time (sec)<input type="number" min="1" step="0.1" data-sim="lap" value="${tl.v}" class="${tl.src==="yours"?"ovr":""}" style="width:100px"></label>`})()}
+  <label class="fld" title="Leave blank to use every driver who is not marked retired.">Cars in field<input type="number" min="2" data-sim="field" value="${o.field||""}" placeholder="All" style="width:80px"></label>
+  <button class="btn sm pri" data-act="${what==="race"?"simRace":"simQual"}" ${has?'data-confirm="1"':""}>${what==="race"?"Simulate race":"Simulate qualifying"}</button></div>
+  <div class="small muted" style="margin-top:6px">Uses the driver, pit crew and vehicle ratings from the Ratings tab, with the track type setting which driver ratings count. The average lap time sets the qualifying times and how big the gaps are, and it is remembered for that track. ${what==="race"&&stg(d).on&&!m.exh?"Stage results are simulated too. ":""}${what==="race"?"The race uses the qualifying order for starting positions, and makes qualifying too if it is empty.":""} Nothing is saved until you press Save results.</div></div>`};
 function modalRace(){
   const d=cur(),r=mlist(d).find(x=>x.id===ui.modal.id),ex=!!ui.modal.exh;if(!r)return "";
   const rows=ui.modal.rows,am=ptsFor(d,rows,true),tab=ui.modal.tab||"res";
   const opts=sel=>`<option value="">— choose —</option>`+[...d.drivers].sort((a,b)=>num(a.num)-num(b.num)).map(x=>`<option value="${x.id}" ${x.id===sel?"selected":""}>${esc(x.num)} · ${esc(x.name)}</option>`).join("");
   return `<div class="dlg" role="dialog" aria-label="Race results" data-s="${ui.series}"><header><h3>${esc(r.name||"Race")}</h3>${ex?`<span class="pill">${esc(r.kind||"Exhibition")} · no points</span>`:""}<span class="muted">${esc(r.track)} ${r.date?"· "+esc(fmtDate(r.date)):""}${r.cautions!=null&&r.cautions!==""?" · "+esc(r.cautions)+" cautions":""}${r.lc!=null&&r.lc!==""?" · "+esc(r.lc)+" lead changes":""}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body"><div class="seg" role="tablist" style="align-self:flex-start;margin-bottom:12px">${[["res","Results"],["qual","Qualifying"+((ui.modal.qrows||[]).length?" ("+ui.modal.qrows.length+")":"")]].concat(!ex&&stg(d).on?[["stg","Stages"]]:[]).map(([v,n])=>`<button role="tab" data-act="mTab" data-v="${v}" class="${tab===v?"on":""}">${n}</button>`).join("")}</div>
-  <div ${tab==="res"?"":"hidden"}><div class="help" style="margin-bottom:12px"><div class="row" style="margin-bottom:8px"><b>NR2003 results file:</b><button class="btn sm pri" data-act="nrPickM">Choose file</button><input type="file" id="nrFileM" accept=".html,.htm,text/html" hidden><span class="small muted">Fills this race from the exported .html. Unknown drivers are added to the roster.</span></div><b>Or type it in:</b> paste the finishing order, one driver per line (car number or name). Optional extra columns: <code>start, laps led, status</code>.
+  <div ${tab==="res"?"":"hidden"}>${simBox(d,ui.modal,"race")}<div class="help" style="margin-bottom:12px"><div class="row" style="margin-bottom:8px"><b>NR2003 results file:</b><button class="btn sm pri" data-act="nrPickM">Choose file</button><input type="file" id="nrFileM" accept=".html,.htm,text/html" hidden><span class="small muted">Fills this race from the exported .html. Unknown drivers are added to the roster.</span></div><b>Or type it in:</b> paste the finishing order, one driver per line (car number or name). Optional extra columns: <code>start, laps led, status</code>.
     <textarea id="pasteBox" rows="4" style="margin:8px 0" placeholder="24&#10;48&#10;20&#10;..."></textarea><button class="btn sm" data-act="mPaste">Fill table from paste</button> <button class="btn sm" data-act="mFill">Add whole roster</button></div>
   <div class="tw"><table><thead><tr><th></th><th>Fin</th><th>Driver</th><th>Start</th><th>Led</th><th>Laps</th><th title="Gap to the leader or the car ahead. The winner can show the race time.">Interval</th><th>Status</th>${ex?"":'<th title="Leave blank for the automatic total. Type a number to override it, for example after a provisional ruling.">Pts</th>'}<th></th></tr></thead><tbody>
   ${rows.map((x,i)=>`<tr data-drop="row" data-key="${i}"><td class="grip" draggable="true" data-drag="row" data-key="${i}" title="Drag to reorder">⠿</td><td><input type="number" class="w-s" data-m="f" data-i="${i}" value="${x.f}"></td><td class="${x.d?"":"bad"}"><select data-m="d" data-i="${i}" style="min-width:190px">${opts(x.d)}</select></td>
    <td><input type="number" class="w-s" data-m="s" data-i="${i}" value="${x.s===""?"":x.s}"></td><td><input type="number" class="w-s" data-m="l" data-i="${i}" value="${x.l||""}"></td><td><input type="number" class="w-s" data-m="n" data-i="${i}" value="${x.n||""}"></td>
-   <td><input type="text" class="w-m" data-m="i" data-i="${i}" value="${esc(x.i||"")}"></td>
+   <td><input type="text" class="w-m" data-m="i" data-i="${i}" value="${esc(x.i||"")}" placeholder="${esc(ivlTxt({f:num(x.f),x:x.x}))}"></td>
    <td><input type="text" class="w-m" list="stat" data-m="x" data-i="${i}" value="${esc(x.x)}"></td>${ex?"":`<td><input type="number" class="w-s ${x.p===""||x.p==null?"":"ovr"}" data-m="p" data-i="${i}" value="${x.p===""||x.p==null?"":x.p}" placeholder="${x.d&&am.has(x.d)?am.get(x.d):""}"></td>`}<td style="white-space:nowrap"><button class="btn sm" data-act="mUp" data-i="${i}" aria-label="Move up">↑</button> <button class="btn sm" data-act="mDn" data-i="${i}" aria-label="Move down">↓</button> <button class="btn sm danger" data-act="mDel" data-i="${i}">✕</button></td></tr>`).join("")||'<tr><td colspan="10" class="empty">No results yet. Paste the finishing order above or add a row.</td></tr>'}
   </tbody></table></div><datalist id="stat">${STATUSES.map(s=>`<option>${s}</option>`).join("")}</datalist></div>
   <div ${tab==="qual"?"":"hidden"}>${qualPane(d,ui.modal)}</div>${!ex&&stg(d).on?`<div ${tab==="stg"?"":"hidden"}>${stagePane(d,ui.modal)}</div>`:""}</div>
   <footer>${tab==="qual"?'<button class="btn" data-act="qAdd">+ Add row</button>':tab==="stg"?"":'<button class="btn" data-act="mAdd">+ Add row</button>'}<span class="sp"></span>${r.done?'<button class="btn danger" data-act="mClear" data-confirm="1">Clear results</button>':""}<button class="btn" data-act="gfxOpen" title="Make an image of the results or qualifying">Create graphic</button><button class="btn pri" data-act="mSave">Save results</button></footer></div>`;
 }
+const ivlTxt=x=>{if(x.i!=null&&String(x.i).trim()!=="")return String(x.i);if(x.f===1)return "Leader";return x.x&&x.x!=="Running"?"DNF":""};
 const logSeg=()=>`<div class="seg" role="group" aria-label="Race log filter"><button data-act="logFilter" data-v="all" class="${ui.logWins?"":"on"}">All races</button><button data-act="logFilter" data-v="wins" class="${ui.logWins?"on":""}">Wins only</button></div>`;
 function modalDriver(){
   const d=cur(),dr=drvOf(d,ui.modal.id);if(!dr)return "";
@@ -1843,7 +1940,7 @@ function modalDriver(){
   const ents=sel.map(dd=>({dd,dx:dd.drivers.find(same)}));
   const s=(()=>{const t={pts:0,starts:0,wins:0,poles:0,t5:0,t10:0,led:0,laps:0,dnf:0,sf:0,ss:0};ents.forEach(({dd,dx})=>{const z=agg([dd],(a,b)=>b.id).get(dx.id);for(const f in t)t[f]+=z[f]||0});t.avgF=t.starts?t.sf/t.starts:null;t.avgS=t.starts&&t.ss?t.ss/t.starts:null;return t})();
   const log=ents.map(({dd,dx})=>{const pm=new Map();dd.races.forEach(r=>{if(r.done)pm.set(r.id,racePoints(dd,r))});
-    return dd.races.map((r,i)=>{const x=(r.res||[]).find(z=>z.d===dx.id);return x&&(!ui.logWins||x.f===1)?`<tr>${multiY?`<td>${dd.year}</td>`:""}${multiS?`<td>${esc(dd.name)}</td>`:""}<td class="n">${i+1}</td><td><a href="#" data-act="race" data-id="${r.id}" data-s="${dd.series}" data-y="${dd.year}" data-from="${dx.id}">${esc(r.name)||"Unnamed race"}</a></td><td>${esc(r.track)}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td><td class="n">${esc(x.i||"")}</td><td class="n">${pm.get(r.id).get(dx.id)}</td></tr>`:""}).join("")}).join("");
+    return dd.races.map((r,i)=>{const x=(r.res||[]).find(z=>z.d===dx.id);return x&&(!ui.logWins||x.f===1)?`<tr>${multiY?`<td>${dd.year}</td>`:""}${multiS?`<td>${esc(dd.name)}</td>`:""}<td class="n">${i+1}</td><td><a href="#" data-act="race" data-id="${r.id}" data-s="${dd.series}" data-y="${dd.year}" data-from="${dx.id}">${esc(r.name)||"Unnamed race"}</a></td><td>${esc(r.track)}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td><td class="n">${esc(ivlTxt(x))}</td><td class="n">${pm.get(r.id).get(dx.id)}</td></tr>`:""}).join("")}).join("");
   const lyh=(multiY?"<th>Year</th>":"")+(multiS?"<th>Series</th>":"");
   const scope=(yf==="all"?"All seasons":yf)+(sf==="all"?"":" · "+((allD.find(dd=>dd.series===sf)||{}).name||""));
   const serOpts=[...new Map(allD.map(dd=>[dd.series,dd.name])).entries()];
@@ -1861,7 +1958,7 @@ function modalDriver(){
 function renderModal(){
   const el=$("#modal");
   if(!ui.modal){el.innerHTML="";return}
-  el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="numprof"?modalNum():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="dlu"?modalDlu():ui.modal.type==="ages"?modalAges():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="track"?modalTrack():ui.modal.type==="gfx"?modalGfx():modalDriver();
+  el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="numprof"?modalNum():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="dlu"?modalDlu():ui.modal.type==="ages"?modalAges():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="gen"?modalGen():ui.modal.type==="track"?modalTrack():ui.modal.type==="gfx"?modalGfx():modalDriver();
   if(ui.modal.type==="gfx")gfxDraw();
 }
 function openRace(id,exh){
@@ -2332,6 +2429,22 @@ const ACT={
   ptDel:()=>{const d=cur(),a=d.settings[ui.modal.key];if(a.length>1)a.pop();touch(docId(d.series,d.year));renderModal();return "nr"},
   track:b=>{ui.modal={type:"track",key:b.dataset.k,scope:ui.trkScope||"series"};renderModal();return "nr"},
   trkScope:b=>{ui.trkScope=b.dataset.v},
+  ntkAdd:()=>{const el=document.getElementById("ntkIn"),nm=el?el.value.trim():"";if(!nm){toast("Type a track name first");return "nr"}
+    const d=cur(),key=normTrack(nm)||nm.toLowerCase();d.trackProfiles=d.trackProfiles||{};if(!d.trackProfiles[key])d.trackProfiles[key]={name:nm};
+    touch(docId(d.series,d.year));ui.modal={type:"track",key,scope:ui.trkScope||"series"};renderModal();return},
+  tpDel:()=>{const d=cur(),m=ui.modal;if(d.trackProfiles)delete d.trackProfiles[m.key];touch(docId(d.series,d.year));ui.modal=null;renderModal()},
+  genOpen:()=>{const sc=ui.trkScope||"series",tr=trackIndex(sc),sel={};tr.forEach(t=>sel[t.key]=true);const d=cur();
+    ui.modal={type:"gen",scope:sc,sel,n:d.races.length?"":36,order:"list",tmpl:"{track}",start:"",gap:7,mode:"append"};renderModal();return "nr"},
+  genAll:b=>{const m=ui.modal;genTracks().forEach(t=>m.sel[t.key]=b.dataset.v==="1");renderModal();return "nr"},
+  genGo:()=>{const m=ui.modal,d=cur(),tr=genTracks().filter(t=>m.sel[t.key]),N=Math.max(0,Math.round(num(m.n)));
+    if(!tr.length||!N){toast("Pick at least one track and a number of races");return "nr"}
+    const shuf=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+    let seq=[];while(seq.length<N){let b=m.order==="shuffle"?shuf(tr):tr.slice();if(seq.length&&tr.length>1&&b[0]===seq[seq.length-1]){b.push(b.shift())}seq=seq.concat(b)}seq=seq.slice(0,N);
+    if(m.mode==="replace")d.races=[];
+    const base=d.races.length,t0=m.start?new Date(m.start+"T12:00:00"):null,gap=Math.max(1,Math.round(num(m.gap))||7);
+    seq.forEach((t,i)=>{let date="";if(t0&&!isNaN(t0)){const x=new Date(t0.getTime()+i*gap*86400000);date=x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0")}
+      d.races.push({id:uid(),date,name:(m.tmpl||"{track}").replace(/\{track\}/g,t.name).replace(/\{n\}/g,String(base+i+1)),track:t.name,type:t.type||"",len:t.len||"",laps:t.laps||"",done:false,res:[]})});
+    touch(docId(d.series,d.year));ui.modal=null;renderModal();ui.view="schedule";toast(N+" races added to the schedule")},
   awadd:()=>{const d=cur();d.awards=d.awards||[];d.awards.push({id:uid(),name:"",winner:""});touch(docId(d.series,d.year))},
   awdel:b=>{const d=cur();d.awards=(d.awards||[]).filter(a=>a.id!==b.dataset.id);touch(docId(d.series,d.year))},
   sugg:()=>{const d=cur(),n=d.year+1;ui.modal={type:"sugg",age:true,scale:4,min:null,target:docs[docId(d.series,n)]?n:d.year,adj:{},off:{}};renderModal();return "nr"},
@@ -2413,6 +2526,8 @@ const ACT={
   qDn:b=>{moveQ(+b.dataset.i,+b.dataset.i+1);return "nr"},
   qAdd:()=>{const m=ui.modal;m.qrows.push({d:"",p:m.qrows.length+1,t:""});renderModal();return "nr"},
   qDel:b=>{ui.modal.qrows.splice(+b.dataset.i,1);renderModal();return "nr"},
+  simQual:()=>{const d=cur(),m=ui.modal,r=mlist(d).find(x=>x.id===m.id);if(!r)return "nr";const f=simField(d);if(f.length<2){toast("Add at least 2 drivers who aren't retired first");return "nr"}m.qrows=simQual(d,r,f);renderModal();toast("Qualifying simulated. Press Save results to keep it.");return "nr"},
+  simRace:()=>{const d=cur(),m=ui.modal,r=mlist(d).find(x=>x.id===m.id);if(!r)return "nr";const res=simRace(d,r,m);if(!res){toast("Add at least 2 drivers who aren't retired first");return "nr"}m.rows=res.rows;if(res.q)m.qrows=res.q;if(res.stg)m.srows=res.stg;renderModal();toast("Race simulated"+(res.q?" with qualifying":"")+(res.stg?(res.q?" and":" with")+" stages":"")+". Press Save results to keep it.");return "nr"},
   qClear:()=>{ui.modal.qrows=[];renderModal();return "nr"},
   qFromGrid:()=>{const m=ui.modal,old=new Map((m.qrows||[]).map(x=>[x.d,x.t]));
     m.qrows=m.rows.filter(x=>x.d&&x.s).sort((a,b)=>num(a.s)-num(b.s)).map(x=>({d:x.d,p:num(x.s),t:old.get(x.d)||""}));
@@ -2535,6 +2650,13 @@ document.addEventListener("change",e=>{
     if(t.dataset.lnp){const k=t.dataset.lnp;mo[k]=k==="lock"?Math.max(0,Math.min(10,Math.round(num(t.value)))):t.value;if(k==="lock")t.value=mo.lock;
       const L=document.getElementById("lnLists");if(L&&mo.files.length&&k!=="race"&&k!=="lst")L.innerHTML=lnLists(mo);
       const R=document.getElementById("lnRost");if(R&&mo.files.length)R.innerHTML=lnRosterSum(mo);return}}
+  if(ui.modal&&ui.modal.type==="gen"){const mo=ui.modal;
+    if(t.dataset.gk){mo.sel[t.dataset.gk]=t.checked;setTimeout(renderModal,0);return}
+    if(t.dataset.gp){mo[t.dataset.gp]=t.value;setTimeout(renderModal,0);return}}
+  if(t.dataset.tp&&ui.modal&&ui.modal.type==="track"){const d=cur(),k=ui.modal.key,tt=trackIndex(ui.modal.scope||"series").find(x=>x.key===k);
+    d.trackProfiles=d.trackProfiles||{};const p=d.trackProfiles[k]=d.trackProfiles[k]||{name:tt?tt.name:k};
+    const f=t.dataset.tp;if(t.value.trim()==="")delete p[f];else p[f]=(f==="avg"||f==="len"||f==="laps")?String(num(t.value)):t.value;
+    touch(docId(d.series,d.year));setTimeout(renderModal,0);return}
   if(ui.modal&&ui.modal.type==="rbulk"){const mo=ui.modal;
     if(t.dataset.rb){mo.sel[t.dataset.rb]=t.checked;setTimeout(renderModal,0);return}
     if(t.dataset.rbp==="keep"){mo.keep=t.checked;return}
@@ -2556,7 +2678,7 @@ document.addEventListener("change",e=>{
   if(t.dataset.tf&&ui.modal&&["team","driver","numprof"].includes(ui.modal.type)){const mo=ui.modal;mo[t.dataset.tf]=t.value==="all"?"all":t.dataset.tf==="yf"?+t.value:t.value;if(t.dataset.tf==="sf")delete mo.yf;renderModal();return}
   if(t.dataset.calpick!==undefined){if(/^\d{4}-\d\d$/.test(t.value)){ui.cal=t.value;ui.calFor=ui.year;render()}return}
   if(t.dataset.dfmt!==undefined){DFMT=t.value;try{localStorage.setItem("nr_datefmt",DFMT)}catch(e){}render();return}
-  if(t.dataset.ptpreset!==undefined&&ui.modal&&ui.modal.type==="points"&&d){const pr=presetsFor(ui.modal.key)[t.value];if(pr){d.settings[ui.modal.key]=[...pr[1]];touch(docId(d.series,d.year));renderModal()}return}
+  if(t.dataset.ptpreset!==undefined&&ui.modal&&ui.modal.type==="points"&&d){const pr=presetsFor(ui.modal.key)[t.value];if(pr){d.settings[ui.modal.key]=[...pr[1]];touch(docId(d.series,d.year));setTimeout(renderModal,0)}return}
   if(t.id==="yearSel"){ui.year=+t.value;setTimeout(render,0);return}
   if(t.id==="showAll"){ui.showAll=t.checked;render();return}
   if(t.id&&t.id.startsWith("col_")){const k=t.id.slice(4);docsFor(k).forEach(dd=>{dd.color=t.value;touch(docId(dd.series,dd.year))});render();return}
@@ -2567,6 +2689,8 @@ document.addEventListener("change",e=>{
   if(t.id==="nrFile"||t.id==="nrFileM"){const fs=[...t.files];t.value="";if(fs.length)importFiles(fs,t.id==="nrFileM"&&ui.modal?ui.modal.id:null);return}
   if(t.dataset.cmp!==undefined){ui.cmp=ui.cmp||[];ui.cmp[+t.dataset.cmp]=t.value;setTimeout(render,0);return}
   if(t.dataset.stg&&ui.modal&&ui.modal.srows){const [i,j]=t.dataset.stg.split(":").map(Number),l=ui.modal.srows[i];if(l){while(l.length<=j)l.push("");l[j]=t.value}setTimeout(renderModal,0);return}
+  if(t.dataset.sim==="lap"){const d=cur(),r=ui.modal&&ui.modal.type==="race"&&mlist(d).find(x=>x.id===ui.modal.id);if(r){const key=trackKey(r);d.lapTimes=d.lapTimes||{};if(t.value===""||num(t.value)<=0)delete d.lapTimes[key];else d.lapTimes[key]=num(t.value);touch(docId(d.series,d.year));setTimeout(renderModal,0)}return}
+  if(t.dataset.sim){const k=t.dataset.sim;ui.sim[k]=t.value===""?"":Math.max(0,num(t.value));return}
   if(t.dataset.q&&ui.modal&&ui.modal.qrows){const r=ui.modal.qrows[+t.dataset.i],k=t.dataset.q;if(r)r[k]=k==="p"?(t.value===""?"":num(t.value)):t.value;if(k==="d"){const td=t.closest("td");if(td)td.classList.toggle("bad",!t.value)}return}
   if(t.dataset.m){modalEdit(t,true);return}
   const ed=t.dataset.ed;if(!ed||!d)return;
