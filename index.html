@@ -552,7 +552,13 @@ function head(){
     <nav class="views">${VIEWS.map(([k,n])=>`<button data-act="view" data-v="${k}" class="${ui.view===k?"on":""}">${n}</button>`).join("")}</nav>
   </div></header>`;
 }
-function render(){
+const hiddenSet=()=>{const h=new Set();Object.values(docs).forEach(dd=>{String((dd&&dd.settings&&dd.settings.hidden)||"").split(/\n/).forEach(x=>{x=x.trim().toLowerCase();if(x)h.add(x)})});return h};
+const isHid=(x,h)=>!!x&&h.has(String(x.name||"").trim().toLowerCase());
+function withHidden(fn){const h=hiddenSet();if(!h.size)return fn();const saved=[];
+  Object.values(docs).forEach(dd=>{if(dd&&dd.drivers&&dd.drivers.some(x=>isHid(x,h))){saved.push([dd,dd.drivers]);dd.drivers=dd.drivers.filter(x=>!isHid(x,h))}});
+  try{return fn()}finally{saved.forEach(([dd,a])=>{dd.drivers=a})}}
+function render(){withHidden(render0)}
+function render0(){
   refreshSeries();if(!SERIES.some(x=>x[0]===ui.series))ui.series=SERIES[0][0];
   applyColors();
   const a=document.activeElement,fid=a&&a.id==="filter"?a.selectionStart:null;
@@ -1203,7 +1209,7 @@ function vDrivers(d0){
 function vRoster(d){
   const f=ui.filter.toLowerCase();
   const list=d.drivers.filter(x=>!f||(x.name+" "+x.team+" "+x.num+" "+x.make).toLowerCase().includes(f));
-  if(ui.rosSort){const c=ui.rosSort,dir=ui.rosDir;list.sort((a,b)=>{let r;if(c==="num")r=num(a.num)-num(b.num)||String(a.num).localeCompare(String(b.num));else if(c==="age")r=(a.age===""||a.age==null?999:+a.age)-(b.age===""||b.age==null?999:+b.age);else if(c==="pf"||c==="rookie"||c==="charter")r=(a[c]?1:0)-(b[c]?1:0);else r=String(a[c]||"").localeCompare(String(b[c]||""),undefined,{sensitivity:"base"});return r*dir||a.name.localeCompare(b.name)})}
+  if(ui.rosSort){const c=ui.rosSort,dir=ui.rosDir;list.sort((a,b)=>{let r;if(c==="num")r=num(a.num)-num(b.num)||String(a.num).localeCompare(String(b.num));else if(c==="age")r=(a.age===""||a.age==null?999:+a.age)-(b.age===""||b.age==null?999:+b.age);else if(c==="pf"||c==="rookie"||c==="charter"||c==="inactive")r=(a[c]?1:0)-(b[c]?1:0);else r=String(a[c]||"").localeCompare(String(b[c]||""),undefined,{sensitivity:"base"});return r*dir||a.name.localeCompare(b.name)})}
   const rows=list.map(x=>`<tr><td><input type="text" class="w-xs" data-ed="drv" data-id="${x.id}" data-k="num" value="${esc(x.num)}" aria-label="Car number"></td>
     <td><input type="text" class="w-l" data-ed="drv" data-id="${x.id}" data-k="name" value="${esc(x.name)}" aria-label="Driver name"></td>
     <td><input type="number" class="w-xs" min="0" max="120" data-ed="drv" data-id="${x.id}" data-k="age" value="${esc(x.age==null?"":x.age)}" aria-label="Age"></td>
@@ -1213,12 +1219,13 @@ function vRoster(d){
     <td><input type="checkbox" class="chk" data-ed="drv" data-id="${x.id}" data-k="pf" ${x.pf?"checked":""} aria-label="Runs for points"></td>
     <td><input type="checkbox" class="chk" data-ed="drv" data-id="${x.id}" data-k="rookie" ${x.rookie?"checked":""} aria-label="Rookie"></td>
     <td><input type="checkbox" class="chk" data-ed="drv" data-id="${x.id}" data-k="charter" ${x.charter?"checked":""} aria-label="Charter"></td>
+    <td><input type="checkbox" class="chk" data-ed="drv" data-id="${x.id}" data-k="inactive" ${x.inactive?"checked":""} aria-label="Inactive"></td>
     <td><button class="btn sm" data-act="drv" data-id="${x.id}">Card</button> <button class="btn sm" data-act="mergeOpen" data-id="${x.id}" title="Merge into another driver, for example to fix a misspelled name">Merge</button> <button class="btn sm danger" data-act="deldrv" data-id="${x.id}" data-confirm="1">✕</button></td></tr>`).join("");
   return `<div class="row"><h2>${esc(d.name)} Roster · ${d.drivers.length}</h2><span class="sp"></span>
     <input type="text" id="filter" placeholder="Filter by name, team, #" value="${esc(ui.filter)}" style="width:210px">
     ${d.drivers.length?`<button class="btn danger" data-act="clearRoster" data-confirm="1" title="Removes every driver. Race results are removed too, since they belong to those drivers.">${d.races.some(r=>r.done)?"Clear roster and results":"Clear roster"}</button>`:""}<button class="btn" data-act="adddrv">+ Add driver</button><button class="btn pri" data-act="carPick">Import .car files</button><input type="file" id="carFile" accept=".car" multiple hidden></div>
     ${emptyHint(d)}
-    <div class="card tw">${list.length?`<table><thead><tr>${[["num","#"],["name","Driver"],["age","Age"],["team","Team"],["make","Make"],["sponsor","Sponsor"],["pf","Points"],["rookie","Rookie"],["charter","Charter"]].map(([c,n])=>`<th class="s ${ui.rosSort===c?"on":""}" data-act="sortRos" data-v="${c}" ${c==="pf"?'title="Counts in the driver standings"':c==="charter"?'title="Charter cars are always in simulated races and qualifying"':""}>${n}${ui.rosSort===c?(ui.rosDir>0?" ▲":" ▼"):""}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No drivers yet.</div>'}</div>
+    <div class="card tw">${list.length?`<table><thead><tr>${[["num","#"],["name","Driver"],["age","Age"],["team","Team"],["make","Make"],["sponsor","Sponsor"],["pf","Points"],["rookie","Rookie"],["charter","Charter"],["inactive","Inactive"]].map(([c,n])=>`<th class="s ${ui.rosSort===c?"on":""}" data-act="sortRos" data-v="${c}" ${c==="pf"?'title="Counts in the driver standings"':c==="charter"?'title="Charter cars are always in simulated races and qualifying"':c==="inactive"?'title="Inactive drivers are left out of simulated races and qualifying"':""}>${n}${ui.rosSort===c?(ui.rosDir>0?" ▲":" ▼"):""}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No drivers yet.</div>'}</div>
     <p class="small muted">“Charter” cars are always in simulated races and qualifying (you can turn this off in the simulate box). “Points” marks drivers who are running for the championship. Part-timers can stay unchecked and still get results and stats. Edits save automatically.</p>`;
 }
 
@@ -1826,6 +1833,8 @@ function vSetup(d){
     <div class="small muted">Used for the series tabs and highlights across every season.</div></section>
   <section class="card pad sect"><h3>Import from NR2003 car files</h3>
     <div class="small muted">To send your ratings back to NR2003, use "Export ratings to .car files" and pick the folder with your .car files. Their ratings are replaced in place, so keep a copy of the folder first. If your browser does not allow that, you get a zip to unzip over them. To bring files in, choose your .car files (select many at once, or drag them onto the page). Each one gives the driver's name, number, team, sponsor, make and the min and max of every rating. A driver already on the roster with the same name is updated.</div>
+    <label class="fld">Hidden drivers (one name per line)<textarea data-ed="setstr" data-k="hidden" rows="4" style="width:min(340px,100%)" placeholder="Driver Name">${esc(s.hidden||"")}</textarea></label>
+    <div class="small muted">Drivers listed here are hidden everywhere (all series and seasons): roster, standings, stats, results and simulated races. Their data is kept, so removing the name brings them back.</div>
     <label class="fld">Manufacturers for the roster (one per line)<textarea data-ed="setstr" data-k="makeList" rows="5" style="width:min(340px,100%)" placeholder="Chevrolet&#10;Ford&#10;Toyota">${esc(s.makeList||"")}</textarea></label>
     <div class="small muted">These become the choices in the Make column on the Roster tab. Leave it empty to use Chevrolet, Ford, Dodge, Pontiac and Toyota.</div>
     <label class="fld">Make codes<input type="text" data-ed="setstr" data-k="makes" value="${esc(s.makes||"0=Chevrolet")}" style="width:min(340px,100%)"></label>
@@ -1834,6 +1843,9 @@ function vSetup(d){
   <div class="grid2">
   <section class="card pad sect"><h3>Paste a roster</h3>
     <div class="small muted">One driver per line, from a spreadsheet or text. Columns: <code>number, name, team, make, sponsor, runs for points (Y/N)</code>. Optional ratings after that, in the order of the Ratings tab (driver, then pit crew, then vehicle), each as a range like <code>76-96</code> or a single number. Tabs or commas both work. Drivers with the same name are updated instead of duplicated.</div>
+    <div class="row" style="align-items:flex-end"><label class="fld">Look up a real roster<select data-real="rs">${WP_SER.map(([k,n])=>`<option value="${k}" ${((ui.real||{}).rs||(WP_SER.some(x=>x[0]===d.series)?d.series:"cup"))===k?"selected":""}>${n}</option>`).join("")}</select></label>
+    <label class="fld">Year<input type="number" min="1950" max="2100" data-real="ry" value="${esc((ui.real||{}).ry||d.year)}" style="width:90px"></label><button class="btn" data-act="realRoster">Look up</button></div>
+    <div class="small muted">Reads the teams and drivers table from that season's Wikipedia page. You pick who to add.</div>
     <textarea id="impRoster" rows="7" placeholder="24, Jeff Gordon, Hendrick Motorsports, Chevrolet, DuPont, Y&#10;48, Jimmie Johnson, Hendrick Motorsports, Chevrolet, Lowe's, Y"></textarea>
     <div class="row"><button class="btn pri" data-act="impRoster">Import roster</button></div></section>
   <section class="card pad sect"><h3>Import a schedule</h3>
@@ -1898,7 +1910,57 @@ function wpDate(t,y){
   return y+"-"+String(mo).padStart(2,"0")+"-"+String(da).padStart(2,"0")}
 function wpGrid(tbl){const g=[],gl=[];g.links=gl;[...tbl.rows].forEach((tr,ri)=>{g[ri]=g[ri]||[];let ci=0;[...tr.cells].forEach(c=>{while(g[ri][ci]!==undefined)ci++;
   const cl=c.cloneNode(true);cl.querySelectorAll("sup,.reference,style,script").forEach(x=>x.remove());const lk=[...cl.querySelectorAll("a")].map(a=>a.textContent.replace(/\s+/g," ").trim()).find(x=>x.length>2)||"";cl.querySelectorAll("br").forEach(x=>x.replaceWith(" | "));const txt=cl.textContent.replace(/\s+/g," ").trim();
-  const rs=Math.min(+c.rowSpan||1,6),cs=Math.min(+c.colSpan||1,12);for(let a=0;a<rs;a++)for(let b=0;b<cs;b++){(g[ri+a]=g[ri+a]||[])[ci+b]=txt;(gl[ri+a]=gl[ri+a]||[])[ci+b]=lk}ci+=cs})});return g}
+  const rs=Math.min(+c.rowSpan||1,120),cs=Math.min(+c.colSpan||1,12);for(let a=0;a<rs;a++)for(let b=0;b<cs;b++){(g[ri+a]=g[ri+a]||[])[ci+b]=txt;(gl[ri+a]=gl[ri+a]||[])[ci+b]=lk}ci+=cs})});return g}
+const WP_MAKES=/^(chevrolet|chevy|ford|toyota|dodge|pontiac|ram|honda|mercedes|ferrari|renault|alpine|aston martin|mclaren|williams|haas|sauber|red bull|alfa romeo|lotus|brabham|cooper|bmw|mazda|oldsmobile|buick|mercury|plymouth|lincoln|nissan|lexus|infiniti|audi|porsche|lamborghini|chevy)/i;
+function wpRoster(html){
+  const doc=new DOMParser().parseFromString(html,"text/html"),out=[],seen=new Set();
+  doc.querySelectorAll("table.wikitable").forEach(tbl=>{
+    const g=wpGrid(tbl);if(g.length<3)return;
+    const hi=g.findIndex(r=>r&&r.some(x=>/^drivers?\b/i.test(String(x||"").trim())));if(hi<0||hi>2)return;
+    const h=g[hi].map(x=>String(x||"").toLowerCase().trim());
+    if(h.some(x=>/^(pos|points|pts|poles|wins|starts|top)/.test(x)))return;
+    const body=g.slice(hi+1).filter(r=>r&&r.length>=3),n=body.length;if(!n)return;
+    const di=h.findIndex(x=>/^drivers?\b/.test(x));
+    const frac=(c,re)=>body.filter(r=>re.test(String(r[c]||"").split("|")[0].trim())).length/n;
+    const cols=h.map((_,c)=>c);
+    let ni=h.findIndex(x=>/^(no\.?|#|number|car no\.?|car number)(\b|$)/.test(x));
+    if(ni<0||frac(ni,/^#?\d{1,3}$/)<.5){ni=cols.filter(c=>c!==di).map(c=>[c,frac(c,/^#?\d{1,3}$/)]).filter(x=>x[1]>=.5).sort((a,b)=>b[1]-a[1]).map(x=>x[0])[0];if(ni===undefined)ni=-1}
+    let mi=h.findIndex(x=>/manufacturer|^make|chassis|car\b/.test(x));
+    if(mi<0||(mi!==ni&&frac(mi,WP_MAKES)<.4)){const alt=cols.filter(c=>c!==di&&c!==ni).map(c=>[c,frac(c,WP_MAKES)]).filter(x=>x[1]>=.5).sort((a,b)=>b[1]-a[1])[0];mi=alt?alt[0]:(mi>=0&&mi!==ni?mi:-1)}
+    let ti=h.findIndex((x,c)=>/^(team|entrant|owner)/.test(x)&&c!==ni&&c!==mi);
+    if(ti<0)ti=h.findIndex((x,c)=>/constructor/.test(x)&&c!==ni&&c!==mi);
+    if(ti>=0&&frac(ti,/^#?\d{1,3}$/)>.5)ti=-1;
+    if(ni<0)return;
+    const ri=h.findIndex(x=>/^rounds?|^race\(?s?\)?$|^races|schedule/.test(x));
+    let sec="",el=tbl.previousElementSibling;for(let i=0;i<12&&el;i++,el=el.previousElementSibling){if(/^H[2-4]$/.test(el.tagName)||(el.classList&&el.classList.contains("mw-heading"))){sec=el.textContent;break}}
+    const partSec=/limited|part-?time|partial|other|non-?charter/i.test(sec);
+    const MK=/^(chevrolet|chevy|ford|toyota|dodge|pontiac|ram|honda|mercedes|oldsmobile|buick|mercury|plymouth|nissan|lexus|audi|porsche|bmw|mazda)\b/i,NUM=/^#?\d{1,3}$/;
+    const skipH=c=>/crew|chief|reference|source|sponsor|notes?|engine|tyre|tire|chassis|rounds?|races?|schedule/.test(h[c]||"")&&c!==mi&&c!==ni;
+    let lastT="",lastM="",lastN="";
+    for(let r=hi+1;r<g.length;r++){const row=g[r]||[];const dtxt=String(row[di]||"");if(!dtxt)continue;
+      const cell=c=>String(row[c]||"").split("|")[0].replace(/\s*\[.*?\]/g,"").trim();
+      const tclean=x=>x.replace(/\s*\([^)]*\)?/g,"").replace(/\s+#?\d+(\s*[,&\/]\s*#?\d+)*$/,"").trim();
+      const ds=dtxt.split("|").map(x=>x.trim()).filter(Boolean),ns=String(row[ni]||"").split("|").map(x=>x.trim()).filter(Boolean);
+      let make=cols.map(cell).find((x,c)=>c!==di&&MK.test(x)&&x.length<30)||"";
+      let numC=ni>=0&&NUM.test(cell(ni))?ni:cols.find(c=>c!==di&&NUM.test(cell(c)));
+      let team=ti>=0?tclean(cell(ti)):"";
+      const bad=x=>!x||NUM.test(x)||MK.test(x)&&x.length<30;
+      if(bad(team)){team=cols.filter(c=>c!==di&&c!==numC&&!skipH(c)).map(c=>tclean(cell(c))).find(x=>x&&!bad(x)&&!/^(all|full|\d+\s*[–-]\s*\d+|tba|tbd|—|-)/i.test(x)&&x.length>2&&x!==cell(di))||""}
+      if(!make)make=lastM;else lastM=make;
+      if(!team)team=lastT;else lastT=team;
+      const rounds=ri>=0?String(row[ri]||"").trim():"";
+      ds.forEach((dn,k)=>{const rookie=/\(R\)|\bR\)/.test(dn),name=dn.replace(/\([^)]*\)?/g,"").replace(/\[.*?\]/g,"").replace(/\s*#\s*\d+/g,"").replace(/^\d+\s+/,"").replace(/\s+\d+(\s*[,&]\s*\d+)*$/,"").replace(/\s+/g," ").trim();
+        if(!name||/^(tba|tbd|to be announced|—|-)$/i.test(name))return;
+        let num=numC!==undefined?String(row[numC]||"").split("|").map(x=>x.trim()).filter(Boolean):[];
+        const raw=(num.length===ds.length?num[k]:num[0])||(ns[0]||"")||lastN,nm0=String(raw).match(/\d+/),nn=nm0?nm0[0]:"";
+        let pf=!partSec;if(ri>=0){const r0=rounds.split("|")[0].trim(),rg=r0.match(/^1\s*[–-]\s*(\d+)$/);pf=/^(all|full)/i.test(r0)||(rg&&+rg[1]>=20)||false}
+        if(k>0)pf=false;
+        const key=name.toLowerCase(),ex=out.find(o=>o.name.toLowerCase()===key);
+        const rec={use:pf,name,num:nn,team,make,pf,rookie,info:"Columns: "+h.map((x,c)=>x+(c===numC?" → number":c===di?" → driver":c===ti?" → team":"")).join(" · ")};
+        if(ex){if(!ex.pf&&pf)Object.assign(ex,rec);return}
+        out.push(rec)});
+      const f=String(row[numC]||"").match(/\d+/);if(f)lastN=f[0]}});
+  return out}
 function wpTrack(txt,link){let t=String(txt||"").split("|")[0].trim();t=t.replace(/^[OR]\s+(?=[A-Z])/,"").trim();
   if(link&&!/^(oval|road|street|dirt)$/i.test(link)&&t.toLowerCase().includes(link.toLowerCase().slice(0,Math.min(6,link.length)))&&t.length>link.length)t=link;
   const c=t.indexOf(",");if(c>2)t=t.slice(0,c);return t.replace(/^[OR]\s+(?=[A-Z])/,"").trim()}
@@ -1931,11 +1993,20 @@ async function wpLookup(m){
   if(!title)throw new Error("nopage");
   const pg=await j(base+"&action=parse&prop=text&disableeditsection=1&redirects=1&page="+encodeURIComponent(title));
   const html=pg.parse&&pg.parse.text&&(pg.parse.text["*"]||pg.parse.text);if(!html)throw new Error("nopage");
-  m.title=title;m.rows=wpParse(html,m.y,m.s);if(!m.rows.length)throw new Error("notable")}
-async function wpRun(m){try{await wpLookup(m);m.status="done"}catch(e){m.status="err";m.msg=e.message==="nopage"?"Wikipedia has no season page with that name for "+m.y+".":e.message==="notable"?"Found the Wikipedia page ("+m.title+") but couldn't read a schedule table from it.":"Couldn't reach Wikipedia ("+e.message+"). Check your connection."}
+  m.title=title;m.rows=m.kind==="roster"?wpRoster(html):wpParse(html,m.y,m.s);if(!m.rows.length)throw new Error(m.kind==="roster"?"noroster":"notable")}
+async function wpRun(m){try{await wpLookup(m);m.status="done"}catch(e){m.status="err";m.msg=e.message==="nopage"?"Wikipedia has no season page with that name for "+m.y+".":e.message==="notable"?"Found the Wikipedia page ("+m.title+") but couldn't read a schedule table from it.":e.message==="noroster"?"Found the Wikipedia page ("+m.title+") but couldn't find a teams and drivers table on it.":"Couldn't reach Wikipedia ("+e.message+"). Check your connection."}
   if(ui.modal===m)renderModal()}
 const realType2=(tr,s)=>{if(s==="f1")return "Road course";if(s==="indycar")return /texas|iowa|gateway|world wide|wwt|pocono|milwaukee|phoenix|kansas|las vegas|michigan|fontana|homestead|charlotte|atlanta|kentucky|chicagoland|new hampshire|loudon|nashville superspeedway|brickyard|richmond|dover|rockingham|indianapolis motor speedway(?!.*road)/i.test(tr)?realType(tr):"Road course";return realType(tr)};
+function modalRoster(){
+  const m=ui.modal,ser=WP_SER.find(x=>x[0]===m.s),d=cur(),n=m.rows.filter(x=>x.use).length;
+  const body=m.status==="run"?`<div class="empty">Looking up the ${m.y} ${esc(ser[1])} teams and drivers on Wikipedia…</div>`:m.status==="err"?`<div class="empty">${esc(m.msg)}</div>`:
+   `<div class="small"><b>${m.rows.length}</b> drivers found · <b>${m.rows.filter(x=>x.pf).length}</b> full-time · <b>${new Set(m.rows.filter(x=>x.num).map(x=>x.num)).size}</b> different car numbers · <b>${n}</b> ticked to add (${new Set(m.rows.filter(x=>x.use&&x.num).map(x=>x.num)).size} car numbers)</div><div class="row" style="gap:8px"><button class="btn sm" data-act="rrAll" data-v="all">Tick all</button><button class="btn sm" data-act="rrAll" data-v="ft">Full-time only</button><button class="btn sm" data-act="rrAll" data-v="none">Tick none</button></div>
+   <div class="card tw" style="max-height:420px;overflow:auto"><table><thead><tr><th></th><th>#</th><th>Driver</th><th>Team</th><th>Make</th><th>Full-time</th></tr></thead><tbody>${m.rows.map((r,i)=>`<tr><td><input type="checkbox" class="chk" data-rr="${i}" ${r.use?"checked":""}></td><td>${esc(r.num)}</td><td>${esc(r.name)}${r.rookie?' <span class="muted small">(R)</span>':""}</td><td>${esc(r.team)}</td><td>${esc(r.make)}</td><td>${r.pf?"Yes":""}</td></tr>`).join("")}</tbody></table></div>
+   <div class="small muted">From Wikipedia: ${esc(m.title)}. Existing drivers with the same name are updated (number, team, make); new ones are added. Ratings are left alone.</div><div class="small muted">${esc((m.rows[0]||{}).info||"")}</div>`;
+  return `<div class="dlg" role="dialog" aria-label="Look up roster" data-s="${ui.series}" style="max-width:860px"><header><h3>Look up ${m.y} ${esc(ser[1])} roster</h3><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body">${body}</div><footer><span class="sp"></span>${m.status==="done"?`<button class="btn pri" data-act="rrAdd" ${n?"":"disabled"}>Add ${n} drivers</button>`:""}</footer></div>`}
 function modalRLook(){
+  if(ui.modal.kind==="roster")return modalRoster();
   const m=ui.modal,ser=WP_SER.find(x=>x[0]===m.s),d=cur(),n=m.rows.filter(x=>x.use).length;
   const body=m.status==="run"?`<div class="empty">Looking up the ${m.y} ${esc(ser[1])} schedule on Wikipedia…</div>`:m.status==="err"?`<div class="empty">${esc(m.msg)}</div>`:
    `<div class="card tw" style="max-height:420px;overflow:auto"><table><thead><tr><th></th><th>Date</th><th>Race</th><th>Track</th><th class="n">Laps</th></tr></thead><tbody>${m.rows.map((r,i)=>`<tr><td><input type="checkbox" class="chk" data-rl="${i}" ${r.use?"checked":""}></td><td>${esc(r.date.slice(5))}</td><td>${esc(r.name)}</td><td>${esc(r.track)}</td><td class="n">${r.laps?(r.approx?"~":"")+r.laps:""}</td></tr>`).join("")}</tbody></table></div>
@@ -1962,7 +2033,7 @@ const simR=(x,c)=>{const v=rg(x,c);return v?v.a+(v.b-v.a)*Math.random():50};
 const simMean=(x,cs)=>cs.reduce((a,c)=>a+simR(x,c),0)/cs.length;
 function simField(d,over){
   const sh=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
-  const all=sh(d.drivers.filter(x=>!x.retired)),n=Math.round(num(over!==undefined?over:ui.sim.field)),lim=n>0?n:Infinity,used=new Set(),out=[];
+  const all=sh(d.drivers.filter(x=>!x.retired&&!x.inactive&&!isHid(x,hiddenSet()))),n=Math.round(num(over!==undefined?over:ui.sim.field)),lim=n>0?n:Infinity,used=new Set(),out=[];
   const take=x=>{const k=String(x.num==null?"":x.num).trim();if(k&&used.has(k))return false;if(k)used.add(k);out.push(x);return true};
   if(ui.sim.charter!==false)all.filter(x=>x.charter).forEach(take);
   all.forEach(x=>{if(out.length<lim&&!out.includes(x))take(x)});
@@ -2015,7 +2086,7 @@ function simRace(d,r,m){
 const simBox=(d,m,what)=>{const o=ui.sim,has=what==="race"?(m.rows||[]).length:(m.qrows||[]).length;
   return `<div class="help" style="margin-bottom:12px"><div class="row" style="gap:12px;align-items:flex-end"><b>Simulate from ratings</b>
   <label class="fld" title="0 means the best ratings always win. 100 means very unpredictable. Each driver's rating range (like 60–80) is also sampled for every simulation.">Variance (0 to 100)<input type="number" min="0" max="100" step="5" data-sim="variance" value="${o.variance}" style="width:90px"></label>
-  ${what==="qual"?`<label class="fld" title="How many cars try to qualify. Blank means every driver who isn't retired. Charter cars are always included.">Cars attempting<input type="number" min="2" data-sim="qatt" value="${o.qatt||""}" placeholder="All" style="width:80px"></label>`:""}
+  ${what==="qual"?`<label class="fld" title="How many cars try to qualify. Blank means every driver who isn't retired or inactive. Charter cars are always included.">Cars attempting<input type="number" min="2" data-sim="qatt" value="${o.qatt||""}" placeholder="All" style="width:80px"></label>`:""}
   ${what==="race"?`<label class="fld">DNF rate %<input type="number" min="0" max="100" step="1" data-sim="dnf" value="${o.dnf}" style="width:80px"></label>`:""}
   ${(()=>{const r=mlist(d).find(x=>x.id===m.id),tl=r?trackLap(d,r):{v:"",src:""};return `<label class="fld" title="${tl.src==="yours"?"Your own value for this track. Clear the box to go back to the built-in one.":tl.src==="lookup"?"Typical average lap for this track. You can change it.":"Estimated from the track type and length. You can change it."}">Avg lap time (sec)<input type="number" min="1" step="0.1" data-sim="lap" value="${tl.v}" class="${tl.src==="yours"?"ovr":""}" style="width:100px"></label>`})()}
   <label class="fld" title="How spread out the field is. 100 is normal. Lower bunches the cars together, higher strings them out (bigger time gaps, more cars a lap down).">Field spread %<input type="number" min="0" max="400" data-sim="spread" value="${o.spread===undefined||o.spread===""?"":o.spread}" placeholder="100" style="width:80px"></label>
@@ -2067,7 +2138,8 @@ function modalDriver(){
   ${(()=>{const xs=(d.exh||[]).map(ev=>{const x=(ev.res||[]).find(z=>z.d===dr.id);return x&&(!ui.logWins||x.f===1)?`<tr><td><a href="#" data-act="exrace" data-id="${ev.id}" data-from="${dr.id}">${esc(ev.name)||"Event"}</a></td><td>${esc(ev.kind||"")}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td></tr>`:""}).join("");return xs?`<h3 style="margin-top:16px">${d.year} exhibitions</h3><div class="tw"><table><thead><tr><th>Event</th><th>Type</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th></tr></thead><tbody>${xs}</tbody></table></div>`:""})()}
   <div class="row" style="margin-top:16px"><h3>${yf==="all"?"Race log":yf+" race log"}</h3><span class="sp"></span>${logSeg()}</div>${log?`<div class="tw"><table><thead><tr>${lyh}<th class=n>#</th><th>Race</th><th>Track</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th><th class=n title="Gap to the race leader">Interval</th><th class=n>Pts</th></tr></thead><tbody>${log}</tbody></table></div>`:'<p class="muted">'+(ui.logWins?"No wins for this selection.":"No results yet for this selection.")+'</p>'}</div></div>`;
 }
-function renderModal(){
+function renderModal(){withHidden(renderModal0)}
+function renderModal0(){
   const el=$("#modal");
   if(!ui.modal){el.innerHTML="";return}
   el.innerHTML=ui.modal.type==="help"?modalHelp():ui.modal.type==="numprof"?modalNum():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="dlu"?modalDlu():ui.modal.type==="ages"?modalAges():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="rlook"?modalRLook():ui.modal.type==="gen"?modalGen():ui.modal.type==="track"?modalTrack():ui.modal.type==="gfx"?modalGfx():modalDriver();
@@ -2614,7 +2686,7 @@ const ACT={
   drvAt:b=>{ui.series=b.dataset.s;if(b.dataset.y)ui.year=+b.dataset.y;ui.modal={type:"driver",id:b.dataset.id};renderModal()},
   serAt:b=>{ui.series=b.dataset.s;if(b.dataset.y)ui.year=+b.dataset.y;ui.view="roster";ui.filter=""},
   drvFilter:b=>{ui.drvFilter=b.dataset.v},
-  sortRos:b=>{const c=b.dataset.v;if(ui.rosSort===c)ui.rosDir*=-1;else{ui.rosSort=c;ui.rosDir=(c==="pf"||c==="rookie"||c==="charter")?-1:1}},
+  sortRos:b=>{const c=b.dataset.v;if(ui.rosSort===c)ui.rosDir*=-1;else{ui.rosSort=c;ui.rosDir=(c==="pf"||c==="rookie"||c==="charter"||c==="inactive")?-1:1}},
   clearRoster:()=>{const d=cur();d.drivers=[];d.races.forEach(r=>{r.res=[];r.done=false;r.cautions="";r.lc=""});(d.exh||[]).forEach(r=>{r.res=[];r.done=false});ui.filter="";touch(docId(d.series,d.year));toast("Roster cleared")},
   race:b=>{if(b.dataset.s&&docs[docId(b.dataset.s,+b.dataset.y)]&&(b.dataset.s!==ui.series||+b.dataset.y!==ui.year)){ui.series=b.dataset.s;ui.year=+b.dataset.y;render()}openRace(b.dataset.id);if(ui.modal){if(b.dataset.from)ui.modal.back={type:"driver",id:b.dataset.from};else if(b.dataset.fromteam)ui.modal.back={type:"team",team:b.dataset.fromteam}}return "nr"},
   logFilter:b=>{ui.logWins=b.dataset.v==="wins";renderModal();return "nr"},
@@ -2690,6 +2762,13 @@ const ACT={
     if(b.dataset.v==="replace")d.races=out;else d.races=d.races.concat(out);
     touch(docId(d.series,d.year));$("#impSched").value="";toast(out.length+" races "+(b.dataset.v==="replace"?"set":"added"));
   },
+  realRoster:()=>{const r=ui.real=ui.real||{},d=cur(),y=Math.round(num(r.ry||d.year));if(!(y>=1950&&y<=2100)){toast("Enter a year");return "nr"}
+    const m={type:"rlook",kind:"roster",s:r.rs||(WP_SER.some(x=>x[0]===d.series)?d.series:"cup"),y,status:"run",rows:[],msg:"",title:""};ui.modal=m;renderModal();wpRun(m);return "nr"},
+  rrAll:b=>{const m=ui.modal,v=b.dataset.v;m.rows.forEach(r=>r.use=v==="all"?true:v==="none"?false:r.pf);renderModal();return "nr"},
+  rrAdd:()=>{const m=ui.modal,d=cur();let add=0,upd=0;
+    m.rows.filter(r=>r.use).forEach(r=>{let x=d.drivers.find(z=>z.name.trim().toLowerCase()===r.name.toLowerCase());if(x)upd++;else{x=mkDriver();d.drivers.push(x);add++}
+      x.name=r.name;if(r.num)x.num=r.num;if(r.team)x.team=r.team;if(r.make)x.make=r.make;x.pf=r.pf;if(r.rookie)x.rookie=true});
+    touch(docId(d.series,d.year));ui.modal=null;renderModal();toast("Roster: "+add+" added, "+upd+" updated")},
   realLook:()=>{const r=ui.real||{},y=Math.round(num(r.ly));if(!(y>=1950&&y<=2100)){toast("Enter a year");return "nr"}
     const m={type:"rlook",s:r.ls||"cup",y,status:"run",rows:[],msg:"",title:""};ui.modal=m;renderModal();wpRun(m);return "nr"},
   rlAdd:b=>{const m=ui.modal,d=cur(),out=m.rows.filter(r=>r.use).map(r=>({id:uid(),date:d.year+r.date.slice(4),name:r.name,track:r.track,type:realType2(r.track,m.s),len:trackLen(r.track),laps:r.laps||"",done:false,res:[]}));
@@ -2809,7 +2888,8 @@ document.addEventListener("change",e=>{
   if(t.dataset.stg&&ui.modal&&ui.modal.srows){const [i,j]=t.dataset.stg.split(":").map(Number),l=ui.modal.srows[i];if(l){while(l.length<=j)l.push("");l[j]=t.value}setTimeout(renderModal,0);return}
   if(t.dataset.sim==="lap"){const d=cur(),r=ui.modal&&ui.modal.type==="race"&&mlist(d).find(x=>x.id===ui.modal.id);if(r){const key=trackKey(r);d.lapTimes=d.lapTimes||{};if(t.value===""||num(t.value)<=0)delete d.lapTimes[key];else d.lapTimes[key]=num(t.value);touch(docId(d.series,d.year));setTimeout(renderModal,0)}return}
   if(t.dataset.rl!==undefined&&ui.modal&&ui.modal.type==="rlook"){ui.modal.rows[+t.dataset.rl].use=t.checked;setTimeout(renderModal,0);return}
-  if(t.dataset.real){const r=ui.real=ui.real||{};r[t.dataset.real]=t.value;if(t.dataset.real==="ls"||t.dataset.real==="ly")return;return}
+  if(t.dataset.rr!==undefined&&ui.modal&&ui.modal.type==="rlook"){ui.modal.rows[+t.dataset.rr].use=t.checked;setTimeout(renderModal,0);return}
+  if(t.dataset.real){const r=ui.real=ui.real||{};r[t.dataset.real]=t.value;if(["ls","ly","rs","ry"].includes(t.dataset.real))return;return}
   if(t.dataset.simc){ui.sim.charter=t.checked;return}
   if(t.dataset.sim){const k=t.dataset.sim;ui.sim[k]=t.value===""?"":Math.max(0,num(t.value));return}
   if(t.dataset.q&&ui.modal&&ui.modal.qrows){const r=ui.modal.qrows[+t.dataset.i],k=t.dataset.q;if(r)r[k]=k==="p"?(t.value===""?"":num(t.value)):t.value;if(k==="d"){const td=t.closest("td");if(td)td.classList.toggle("bad",!t.value)}return}
