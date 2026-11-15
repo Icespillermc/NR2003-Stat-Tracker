@@ -480,7 +480,7 @@ function racePoints(d,r,idx){
   });
   return m;
 }
-function agg(list,keyFn){
+function agg(list,keyFn,raw){
   const m=new Map();
   list.forEach(d=>{
     const ch=d.settings&&d.settings.chase,after=ch&&ch.on?(ch.after||0):0;
@@ -490,7 +490,7 @@ function agg(list,keyFn){
       if(!s){s={key,pts:0,reg:0,post:0,regWins:0,starts:0,wins:0,t5:0,t10:0,t20:0,poles:0,led:0,dnf:0,sf:0,ss:0,best:99,laps:0,stw:0,stp:0,pp:0,dp:0};Object.assign(s,{id:dr.id,name:dr.name,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf,rookie:dr.rookie});m.set(key,s)}
       return s;
     };
-    const prim=new Map(),als=new Map();d.drivers.forEach(x=>{const k=String(x.name||"").trim().toLowerCase();if(!k)return;if(!prim.has(k))prim.set(k,x);else als.set(x.id,prim.get(k))});
+    const prim=new Map(),als=new Map();d.drivers.forEach(x=>{const k=String(x.name||"").trim().toLowerCase();if(!k)return;if(!prim.has(k))prim.set(k,x);else if(!raw)als.set(x.id,prim.get(k))});
     const effc=new Map();
     const eff=id=>{const x=dm.get(id);if(!x)return null;const pr=als.get(id);if(!pr)return x;let e=effc.get(id);if(!e){e=Object.assign({},x,{id:pr.id,name:pr.name,pf:pr.pf||x.pf,rookie:pr.rookie||x.rookie});effc.set(id,e)}return e};
     d.drivers.forEach(dr=>{const pr=als.get(dr.id);if(pr){const e=eff(dr.id),s=get(e),ks=keyFn(d,e);if(ks===e.id||ks===String(e.name).trim().toLowerCase()){(s._w||(s._w={n:[],t:[]})).n.push(String(dr.num==null?"":dr.num).trim());s._w.t.push(dr.team||"")}return}const s=get(dr);Object.assign(s,{id:dr.id,name:dr.name,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf||[...als].some(([a,b])=>b===dr&&(dm.get(a)||{}).pf),rookie:dr.rookie});const ks=keyFn(d,dr);if(als.size&&(ks===dr.id||ks===String(dr.name).trim().toLowerCase())){const w=s._w||(s._w={n:[],t:[]});w.n.push(String(dr.num==null?"":dr.num).trim());w.t.push(dr.team||"")}});
@@ -513,9 +513,9 @@ function agg(list,keyFn){
       });
     });
   });
-  m.forEach(s=>{if(s._w){const n=[...new Set(s._w.n.filter(Boolean))],t=[...new Set(s._w.t.filter(Boolean))];if(n.length>1)s.num=n.join("/");if(t.length>1)s.team=t.join(" / ")}});
+  m.forEach(s=>{if(s._w){const n=[...new Set(s._w.n.filter(Boolean))],t=[...new Set(s._w.t.filter(Boolean))];if(n.length>1)s.num=n.join("/");if(t.length>1){s.team=t.join(" / ");s.teams=t}}});
   const al=new Map();list.forEach(d=>{const f=new Map();d.drivers.forEach(x=>{const k=String(x.name||"").trim().toLowerCase();if(!k)return;if(!f.has(k))f.set(k,x);else al.set(x.id,f.get(k).id)})});
-  if(al.size){const g=m.get.bind(m);m.get=k=>g(k)||(al.has(k)?g(al.get(k)):undefined)}
+  if(al.size&&!raw){const g=m.get.bind(m);m.get=k=>g(k)||(al.has(k)?g(al.get(k)):undefined)}
   m.forEach(s=>{s.avgF=s.starts?s.sf/s.starts:null;s.avgS=s.starts&&s.ss?s.ss/s.starts:null;s.winp=s.starts?100*s.wins/s.starts:0});
   return m;
 }
@@ -826,7 +826,7 @@ function vCompare(d){
 function vStats(d){
   if(ui.statMode==="compare")return vCompare(d);
   const career=ui.statScope==="career";
-  const m=career?agg(docsFor(ui.series),(dd,x)=>x.name.trim().toLowerCase()):agg([d],(dd,x)=>x.id);
+  const tm=ui.statMode==="teams"||ui.statMode==="makes",m=career?agg(docsFor(ui.series),tm?(dd,x)=>x.name.trim().toLowerCase()+"|"+(x.team||"")+"|"+(x.make||""):(dd,x)=>x.name.trim().toLowerCase(),tm):agg([d],(dd,x)=>x.id,tm);
   const all=[...m.values()].filter(s=>s.starts>0);
   let list=ui.statMode==="drivers"?all:group(all,ui.statMode==="teams"?"team":"make");
   const k=ui.statSort,dir=ui.statDir;
@@ -845,14 +845,14 @@ function vStats(d){
 
 const teamName=x=>((x.team||"").trim())||"Unattached";
 const teamLine=x=>teamLink(x)||'<span class="muted">No team</span>';
-const teamLink=x=>(x.team||"").trim()?`<a href="#" class="tl" data-act="team" data-t="${esc(teamName(x))}">${esc(x.team)}</a>`:"";
+const teamLink=x=>x.teams&&x.teams.length>1?x.teams.map(t=>`<a href="#" class="tl" data-act="team" data-t="${esc(t)}">${esc(t)}</a>`).join(" / "):(x.team||"").trim()?`<a href="#" class="tl" data-act="team" data-t="${esc(teamName(x))}">${esc(x.team)}</a>`:"";
 const teamKey=x=>teamName(x).trim().toLowerCase();
 const teamDocs=()=>SERIES.filter(([k])=>!ui.teamSer||ui.teamSer==="all"||ui.teamSer===k).map(([k])=>docs[docId(k,ui.year)]).filter(Boolean);
 const TSORTS=[["wins","Wins"],["pts","Points"],["starts","Starts"],["poles","Poles"],["t5","Top 5s"],["t10","Top 10s"],["led","Laps led"],["cars","Cars"],["avgF","Average finish"],["rating","Driver rating"],["name","Name"]];
 const numSort=(a,b)=>(num(a.num)-num(b.num))||String(a.num).localeCompare(String(b.num),undefined,{numeric:true})||String(a.name).localeCompare(b.name);
 function teamList(){
   const g=new Map();
-  teamDocs().forEach(dd=>{const m=agg([dd],(a,x)=>x.id),rank=new Map(standings(dd).rows.map(s=>[s.id,s.rank]));
+  teamDocs().forEach(dd=>{const m=agg([dd],(a,x)=>x.id,true),rank=new Map(standings(dd).rows.map(s=>[s.id,s.rank]));
     dd.drivers.forEach(x=>{
       const k=teamKey(x);let o=g.get(k);
       if(!o){o={name:teamName(x),drivers:[],makes:new Set(),series:new Set(),starts:0,wins:0,poles:0,t5:0,t10:0,led:0,dnf:0,sf:0,pts:0};g.set(k,o)}
@@ -916,7 +916,7 @@ function modalTeam(){
   const yrs=[...new Set(sDocs.map(dd=>dd.year))].sort((a,b)=>b-a);
   let yf=m.yf===undefined?ui.year:m.yf;if(yf!=="all"&&!yrs.includes(+yf))yf=yrs.includes(ui.year)?ui.year:yrs[0];
   const sel=sDocs.filter(dd=>yf==="all"||dd.year===+yf),multiS=new Set(sel.map(dd=>dd.series)).size>1,multiY=new Set(sel.map(dd=>dd.year)).size>1;
-  const rows=[];sel.slice().sort((a,b)=>b.year-a.year||ord(a.series)-ord(b.series)).forEach(dd=>{const am=agg([dd],(a,x)=>x.id),rk=new Map(standings(dd).rows.map(z=>[z.id,z.rank]));dd.drivers.filter(x=>teamKey(x)===key).sort(numSort).forEach(x=>rows.push({dd,x,s:am.get(x.id),rk:rk.get(x.id)}))});
+  const rows=[];sel.slice().sort((a,b)=>b.year-a.year||ord(a.series)-ord(b.series)).forEach(dd=>{const am=agg([dd],(a,x)=>x.id,true),rk=new Map(standings(dd).rows.map(z=>[z.id,z.rank]));dd.drivers.filter(x=>teamKey(x)===key).sort(numSort).forEach(x=>rows.push({dd,x,s:am.get(x.id),rk:rk.get(x.id)}))});
   const prof=(cur().teams&&cur().teams[name])||(allDocs.map(dd=>dd.teams&&dd.teams[name]).find(Boolean))||{};
   const tot={starts:0,wins:0,poles:0,t5:0,t10:0,led:0,dnf:0,sf:0};rows.forEach(r=>{for(const f in tot)tot[f]+=r.s[f]});
   const av=["d","p","v"].map(a=>meanOf(rows.map(r=>avgRate(r.x,a))));
@@ -926,7 +926,7 @@ function modalTeam(){
     dd.races.forEach((r,i)=>{if(!r.done)return;(r.res||[]).filter(z=>(!ui.logWins||z.f===1)&&mine.some(x=>x.id===z.d)).forEach(z=>{const x=mine.find(q=>q.id===z.d);
       logRows.push(`<tr>${multiY?`<td>${dd.year}</td>`:""}${multiS?`<td>${esc(dd.name)}</td>`:""}<td class="n">${i+1}</td><td><a href="#" data-act="race" data-id="${r.id}" data-s="${dd.series}" data-y="${dd.year}" data-fromteam="${esc(name)}">${esc(r.name)||"Unnamed race"}</a></td><td>${esc(r.track)}</td><td>${carTag(x)}</td><td class="n">${z.s||"–"}</td><td class="n"><b>${z.f}</b></td><td class="n">${z.l||""}</td><td>${esc(z.x||"")}</td></tr>`)})})});
   const multiH=new Set(sDocs.map(dd=>dd.series)).size>1;
-  const hist=sDocs.map(dd=>{const dl=dd.drivers.filter(x=>teamKey(x)===key),mm=agg([dd],(a,b)=>b.id),t={starts:0,wins:0,poles:0,t5:0,t10:0,led:0};
+  const hist=sDocs.map(dd=>{const dl=dd.drivers.filter(x=>teamKey(x)===key),mm=agg([dd],(a,b)=>b.id,true),t={starts:0,wins:0,poles:0,t5:0,t10:0,led:0};
     dl.forEach(x=>{const z=mm.get(x.id);for(const f in t)t[f]+=z[f]});
     return `<tr><td>${dd.year}</td>${multiH?`<td>${esc(dd.name)}</td>`:""}<td class="n">${dl.length}</td><td class="n">${t.starts}</td><td class="n">${t.wins}</td><td class="n">${t.poles}</td><td class="n">${t.t5}</td><td class="n">${t.t10}</td><td class="n">${t.led}</td></tr>`}).join("");
   const serOpts=[...new Map(allDocs.map(dd=>[dd.series,dd.name])).entries()];
@@ -961,7 +961,7 @@ function vHistory(d){
   const di=new Map();Object.values(docs).filter(x=>x&&x.series&&x.drivers).sort((a,b)=>a.year-b.year||SERIES.findIndex(z=>z[0]===a.series)-SERIES.findIndex(z=>z[0]===b.series)).forEach(x=>x.drivers.forEach(z=>{const k=z.name.trim().toLowerCase();let a=di.get(k);if(!a)di.set(k,a=[]);a.push({id:z.id,s:x.series,y:x.year})}));
   const dL=(name,sr,yr)=>{const a=di.get(String(name).trim().toLowerCase());if(!a||!a.length)return esc(name);const e=(sr!=null&&a.find(q=>q.s===sr&&q.y===yr))||a.filter(q=>q.s===ui.series).slice(-1)[0]||a[a.length-1];return `<a href="#" data-act="drv" data-id="${e.id}" data-s="${e.s}" data-y="${e.y}">${esc(name)}</a>`};
   const rL=(txt,rid,sr,yr)=>rid?`<a href="#" data-act="race" data-id="${rid}" data-s="${sr}" data-y="${yr}">${esc(txt)}</a>`:esc(txt);
-  const tL=t=>t&&String(t).trim()?`<a href="#" class="tl" data-act="team" data-t="${esc(t)}">${esc(t)}</a>`:"";
+  const tL=t=>t&&String(t).trim()?String(t).split(" / ").map(u=>`<a href="#" class="tl" data-act="team" data-t="${esc(u)}">${esc(u)}</a>`).join(" / "):"";
   const holdersL=(b,f,g,link)=>{if(!b)return "";const seen=new Map();b.items.forEach(x=>{const n=f(x);if(!seen.has(n))seen.set(n,x)});const arr=[...seen.entries()];return arr.slice(0,3).map(([n,x])=>{const c=g?g(x):[];return link?link(n):dL(n,c[0],c[1])}).join(", ")+(arr.length>3?" +"+(arr.length-3):"")};
   const champRows=ys.map(y=>`<tr><td><b>${y}</b></td>${SERIES.map(([k])=>{const c=champOf(docs[docId(k,y)]);return c?`<td class="name"><span class="car">${esc(c.num)}</span> <b>${dL(c.name,k,y)}</b>${c.live?' <span class="pill rk">leader</span>':""}<div class="small muted">${tL(c.team)||esc(c.team)} · ${c.wins} win${c.wins===1?"":"s"} · ${c.pts} pts</div></td>`:'<td class="muted">–</td>'}).join("")}</tr>`).join("");
   /* awards for the selected season */
@@ -1011,7 +1011,7 @@ function vHistory(d){
   const streakRow=SK.map(([lbl],k)=>{const b=bestS[k];return b&&b.n>1?`<tr><td>${lbl}</td><td class="n"><b>${b.n}</b></td><td>${dL(b.name,b.s,b.to.y)}</td><td>${spanTxt(b.from,b.to)}</td></tr>`:""}).join("")
     +(bestDW&&bestDW.n>2?`<tr><td>Most races in a row with a different winner</td><td class="n"><b>${bestDW.n}</b></td><td></td><td>${spanTxt(bestDW.from,bestDW.to)}</td></tr>`:"");
   /* team records */
-  const tSeason=[];docL.forEach(x=>{const mm=agg([x],(a,b)=>b.id),g=new Map();mm.forEach(z=>{if(z.starts<1)return;const t=(z.team||"").trim();if(!t)return;const k=t.toLowerCase();let o=g.get(k);if(!o){o={name:t,s:x.series,sname:x.name,year:x.year,wins:0,poles:0,t5:0,t10:0,led:0,pts:0,starts:0,cars:0};g.set(k,o)}["wins","poles","t5","t10","led","pts","starts"].forEach(f=>o[f]+=z[f]);o.cars++});g.forEach(o=>tSeason.push(o))});
+  const tSeason=[];docL.forEach(x=>{const mm=agg([x],(a,b)=>b.id,true),g=new Map();mm.forEach(z=>{if(z.starts<1)return;const t=(z.team||"").trim();if(!t)return;const k=t.toLowerCase();let o=g.get(k);if(!o){o={name:t,s:x.series,sname:x.name,year:x.year,wins:0,poles:0,t5:0,t10:0,led:0,pts:0,starts:0,cars:0};g.set(k,o)}["wins","poles","t5","t10","led","pts","starts"].forEach(f=>o[f]+=z[f]);o.cars++});g.forEach(o=>tSeason.push(o))});
   const tw=x=>x.year+(ALL?" · "+x.sname:"");
   const tsr=[["Most wins in a season","wins"],["Most poles in a season","poles"],["Most top 5s in a season","t5"],["Most top 10s in a season","t10"],["Most laps led in a season","led"],["Most points in a season","pts"],["Most cars in a season","cars"]].map(([n,f])=>{const b=bestOf(tSeason,x=>x[f]>0?x[f]:null);return b?`<tr><td>${n}</td><td class="n"><b>${b.v}</b></td><td>${holdersL(b,x=>x.name,null,tL)}</td><td>${[...new Set(b.items.map(tw))].join(", ")}</td></tr>`:""}).join("");
   const tc=new Map();tSeason.forEach(o=>{const k=o.name.toLowerCase();let a=tc.get(k);if(!a){a={name:o.name,wins:0,poles:0,t5:0,t10:0,led:0,starts:0,titles:0,seasons:new Set()};tc.set(k,a)}["wins","poles","t5","t10","led","starts"].forEach(f=>a[f]+=o[f]);a.seasons.add(o.year+"|"+o.s)});
