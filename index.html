@@ -42,6 +42,7 @@ button{cursor:pointer}
 .brand{display:flex;align-items:center;gap:10px}
 .brand b{font-family:var(--f-disp);font-size:24px;line-height:1;letter-spacing:.02em;text-transform:uppercase;display:block}
 .brand small{color:var(--muted);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.pic{width:30px;height:30px;border-radius:6px;object-fit:cover;flex:none;vertical-align:middle;background:var(--line,#333)}.pic.ph{display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.02em}.pic.sm{width:24px;height:24px;margin-right:6px}.pic.lg{width:88px;height:88px;border-radius:10px}.pic.xl{width:150px;height:150px;border-radius:12px}
 .flag{width:26px;height:26px;border:1px solid var(--ink);flex:none;
   background:conic-gradient(var(--ink) 25%,var(--surface) 0 50%,var(--ink) 0 75%,var(--surface) 0) 0 0/13px 13px}
 .barR{display:flex;align-items:center;gap:12px}
@@ -489,13 +490,13 @@ function agg(list,keyFn,raw){
     const dm=new Map(d.drivers.map(x=>[x.id,x]));
     const get=dr=>{
       const key=keyFn(d,dr);let s=m.get(key);
-      if(!s){s={key,pts:0,reg:0,post:0,regWins:0,starts:0,wins:0,t5:0,t10:0,t20:0,poles:0,led:0,dnf:0,sf:0,ss:0,best:99,laps:0,stw:0,stp:0,pp:0,dp:0};Object.assign(s,{id:dr.id,name:dr.name,nat:dr.nat,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf,rookie:dr.rookie});m.set(key,s)}
+      if(!s){s={key,pts:0,reg:0,post:0,regWins:0,starts:0,wins:0,t5:0,t10:0,t20:0,poles:0,led:0,dnf:0,sf:0,ss:0,best:99,laps:0,stw:0,stp:0,pp:0,dp:0};Object.assign(s,{id:dr.id,name:dr.name,nat:dr.nat,photo:dr.photo,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf,rookie:dr.rookie});m.set(key,s)}
       return s;
     };
     const prim=new Map(),als=new Map();d.drivers.forEach(x=>{const k=String(x.name||"").trim().toLowerCase();if(!k)return;if(!prim.has(k))prim.set(k,x);else if(!raw)als.set(x.id,prim.get(k))});
     const effc=new Map();
     const eff=id=>{const x=dm.get(id);if(!x)return null;const pr=als.get(id);if(!pr)return x;let e=effc.get(id);if(!e){e=Object.assign({},x,{id:pr.id,name:pr.name,pf:pr.pf||x.pf,rookie:pr.rookie||x.rookie});effc.set(id,e)}return e};
-    d.drivers.forEach(dr=>{const pr=als.get(dr.id);if(pr){const e=eff(dr.id),s=get(e),ks=keyFn(d,e);if(ks===e.id||ks===String(e.name).trim().toLowerCase()){(s._w||(s._w={n:[],t:[],i:[]})).n.push(String(dr.num==null?"":dr.num).trim());s._w.t.push(dr.team||"");s._w.i.push(dr.id)}return}const s=get(dr);Object.assign(s,{id:dr.id,name:dr.name,nat:dr.nat,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf||[...als].some(([a,b])=>b===dr&&(dm.get(a)||{}).pf),rookie:dr.rookie});const ks=keyFn(d,dr);if(als.size&&(ks===dr.id||ks===String(dr.name).trim().toLowerCase())){const w=s._w||(s._w={n:[],t:[],i:[]});w.n.push(String(dr.num==null?"":dr.num).trim());w.t.push(dr.team||"");w.i.push(dr.id)}});
+    d.drivers.forEach(dr=>{const pr=als.get(dr.id);if(pr){const e=eff(dr.id),s=get(e),ks=keyFn(d,e);if(ks===e.id||ks===String(e.name).trim().toLowerCase()){(s._w||(s._w={n:[],t:[],i:[]})).n.push(String(dr.num==null?"":dr.num).trim());s._w.t.push(dr.team||"");s._w.i.push(dr.id)}return}const s=get(dr);Object.assign(s,{id:dr.id,name:dr.name,nat:dr.nat,photo:dr.photo,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf||[...als].some(([a,b])=>b===dr&&(dm.get(a)||{}).pf),rookie:dr.rookie});const ks=keyFn(d,dr);if(als.size&&(ks===dr.id||ks===String(dr.name).trim().toLowerCase())){const w=s._w||(s._w={n:[],t:[],i:[]});w.n.push(String(dr.num==null?"":dr.num).trim());w.t.push(dr.team||"");w.i.push(dr.id)}});
     const dpo=duelPts(d);
     if(dpo.on)(d.exh||[]).forEach(ev=>{if(ev.kind!=="Duel"||!ev.done)return;(ev.res||[]).forEach(x=>{const dr0=dm.get(x.d),v=dpo.pts[x.f-1]||0;if(!dr0||!v)return;const s0=get(dr0);s0.pts+=v;s0.dp+=v;if(after)s0.reg+=v})});
     d.races.forEach((r,i)=>{
@@ -798,7 +799,7 @@ function vStandings(d){
     const nxt=i?rows[i-1].show-s.show:0,sameGroup=i&&rows[i-1].chase===s.chase;
     if(chase&&i&&rows[i-1].chase&&!s.chase)html+=`<tr class="div"><td colspan="17">Outside the Chase · season points</td></tr>`;
     html+=`<tr><td class="rank">${s.rank}</td><td><span class="car">${esc(s.num)}</span></td>
-      <td class="name">${flagOf(s.nat)?`<a href="#" class="fl" data-act="country" data-n="${esc(natNorm(s.nat))}">${flagHtml(s.nat)}</a> `:""}<a href="#" data-act="drv" data-id="${s.id}">${esc(s.name)}</a>${s.rookie?' <span class="pill rk">R</span>':""}<div class="small muted">${teamLine(s)}</div></td>${qs?`<td><span class="pill ${stT[qs.m.get(s.id)||"out"][0]}">${stT[qs.m.get(s.id)||"out"][1]}</span></td>`:""}
+      <td class="name">${s.photo?`<img class="pic sm" src="${s.photo}" alt="">`:""}${flagOf(s.nat)?`<a href="#" class="fl" data-act="country" data-n="${esc(natNorm(s.nat))}">${flagHtml(s.nat)}</a> `:""}<a href="#" data-act="drv" data-id="${s.id}">${esc(s.name)}</a>${s.rookie?' <span class="pill rk">R</span>':""}<div class="small muted">${teamLine(s)}</div></td>${qs?`<td><span class="pill ${stT[qs.m.get(s.id)||"out"][0]}">${stT[qs.m.get(s.id)||"out"][1]}</span></td>`:""}
       <td class="n"><b>${s.show}</b></td><td class="n">${i?(sameGroup?"-"+(lead-s.show):"–"):"–"}</td><td class="n">${i&&sameGroup?(nxt?"-"+nxt:"0"):"–"}</td>
       <td class="n">${s.starts}</td><td class="n">${s.wins}</td><td class="n">${s.t5}</td><td class="n">${s.t10}</td><td class="n">${s.poles}</td><td class="n">${s.led}</td><td class="n">${s.dnf}</td>${stg(d).on?`<td class="n">${s.stw}</td><td class="n">${s.stp}</td><td class="n">${s.pp}</td>`:""}<td class="n">${s.avgF!=null?fmt(s.avgF):"–"}</td></tr>`;
   });
@@ -1188,6 +1189,69 @@ const flagHtml=x=>{const c=flagOf(x);return c?`<img class="flag" src="https://fl
 const natHtml=x=>x?(flagHtml(x)?flagHtml(x)+" ":"")+esc(natNorm(x)):"";
 const teamNat=name=>{const k=String(name||"").trim().toLowerCase(),c=cur();let r="";const look=dd=>{if(r||!dd||!dd.teams)return;for(const n in dd.teams){if(n.trim().toLowerCase()===k&&dd.teams[n]&&dd.teams[n].nat){r=natNorm(dd.teams[n].nat);return}}};look(c);Object.values(docs).forEach(look);return r};
 const teamFlag=name=>{const n=teamNat(name);return n&&flagOf(n)?`<a href="#" class="fl" data-act="country" data-n="${esc(n)}">${flagHtml(n)}</a> `:""};
+
+
+
+function modalHomes(){
+  const m=ui.modal,n=m.rows.filter(r=>r.use&&r.home).length;
+  return `<div class="dlg" role="dialog" aria-label="Look up hometowns" data-s="${ui.series}" style="max-width:800px"><header><h3>Look up hometowns</h3><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body" style="display:flex;flex-direction:column;gap:12px">
+    <div class="help">Uses each driver's <b>birthplace</b> on Wikidata, shown as City, State for US places. A driver's hometown can differ from where they were born, so edit any result before applying. Check each match too, since made-up drivers and common names can match the wrong person. Untick any you want to keep as they are.</div>
+    <label class="row" style="gap:6px"><input type="checkbox" class="chk" data-hover ${m.over?"checked":""}> <span class="small">Replace hometowns that are already filled in (when the found one is different)</span></label>
+    ${m.status==="running"?`<div class="muted">Looking up ${m.done} of ${m.total}…</div>`:""}
+    ${m.rows.length?`<div class="card tw" style="max-height:440px;overflow:auto"><table><thead><tr><th></th><th>Driver</th><th>Found</th><th>Now</th><th>Hometown</th></tr></thead><tbody>${m.rows.map((r,i)=>`<tr class="${r.use&&r.home?"":"dim"}"><td><input type="checkbox" data-hu="${i}" ${r.use&&r.home?"checked":""} ${r.home?"":"disabled"} aria-label="Use hometown for ${esc(r.name)}"></td><td>${esc(r.name)}</td><td>${esc(r.label)}<div class="small muted">${esc(r.desc)}</div></td><td>${r.cur?esc(r.cur):'<span class="muted">–</span>'}</td><td>${r.home?`<input type="text" class="w-l" data-hv="${i}" value="${esc(r.home)}" aria-label="Hometown for ${esc(r.name)}">`:'<span class="muted">no birthplace listed</span>'}</td></tr>`).join("")}</tbody></table></div>`:""}
+    ${m.status==="done"?`<div class="small muted">${m.rows.length} found${m.miss.length?`. Not found: ${esc(m.miss.join(", "))}`:""}</div>`:""}
+    ${m.status==="done"&&m.errs.length?`<div class="small" style="color:var(--bad,#c0392b)">Couldn't check ${m.errs.length} (${esc(m.errs.join(", "))}) because Wikipedia/Wikidata was busy or unreachable. Close this and run it again; finished lookups are remembered.</div>`:""}
+  </div>
+  <footer><span class="small muted">A hometown applies to the driver in every series and season.</span><span class="sp"></span><button class="btn pri" data-act="homeApply" ${n?"":"disabled"}>Apply ${n}</button></footer></div>`}
+async function homeRun(m){
+  const names=new Map();
+  Object.values(docs).forEach(dd=>{if(dd&&dd.drivers)dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(!key)return;const o=names.get(key);if(!o)names.set(key,{name:x.name.trim(),cur:x.hometown||""});else if(!o.cur&&x.hometown)o.cur=x.hometown})});
+  const list=[...names.values()];m.total=list.length;m.done=0;m.status="running";m.rows=[];m.miss=[];m.errs=[];renderModal();
+  let q=0,fail=0;
+  const work=async()=>{while(q<list.length&&ui.modal===m){const it=list[q++];
+    try{const f=await wdLookup(it.name,false,true);if(f)m.rows.push({name:it.name,cur:it.cur,label:f.label,desc:f.desc,home:f.home,use:!!f.home&&(m.over?f.home!==it.cur:!it.cur)});else m.miss.push(it.name)}
+    catch(e){fail++;m.errs.push(it.name);if(fail>=6&&!m.rows.length){q=list.length}}
+    m.done++;if(m.done%3===0||m.done===m.total)if(ui.modal===m)renderModal()}};
+  await Promise.all([work(),work(),work()]);
+  if(ui.modal!==m)return;
+  m.rows.sort((a,b)=>a.name.localeCompare(b.name));m.status="done";renderModal();
+}
+function modalPhotos(){
+  const m=ui.modal,n=m.rows.filter(r=>r.use&&r.photo).length;
+  return `<div class="dlg" role="dialog" aria-label="Find driver photos" data-s="${ui.series}" style="max-width:760px"><header><h3>Find driver photos</h3><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body" style="display:flex;flex-direction:column;gap:12px">
+    <div class="help">Searches Wikipedia/Wikidata for each driver and downloads their photo from Wikimedia Commons. Check each match before applying, since made-up drivers and common names can match the wrong person. Drivers who already have a photo start unticked. Photo licenses vary, so check them before sharing publicly.</div>
+    ${m.status==="running"?`<div class="muted">Looking up ${m.done} of ${m.total}…</div>`:""}
+    ${m.rows.length?`<div class="card tw" style="max-height:440px;overflow:auto"><table><thead><tr><th></th><th>Driver</th><th>Now</th><th>Found</th></tr></thead><tbody>${m.rows.map((r,i)=>`<tr class="${r.use?"":"dim"}"><td><input type="checkbox" data-pu="${i}" ${r.use?"checked":""} aria-label="Use photo for ${esc(r.name)}"></td><td>${esc(r.name)}<div class="small muted">${esc(r.label)} · ${esc(r.desc)}</div></td><td>${r.cur?`<img class="pic lg" src="${r.cur}" alt="">`:'<span class="muted">–</span>'}</td><td><img class="pic lg" src="${r.photo}" alt=""></td></tr>`).join("")}</tbody></table></div>`:""}
+    ${m.status==="done"?`<div class="small muted">${m.rows.length} found${m.miss.length?`. No photo found: ${esc(m.miss.join(", "))}`:""}</div>`:""}
+    ${m.status==="done"&&m.errs.length?`<div class="small" style="color:var(--bad,#c0392b)">Couldn't check ${m.errs.length} (${esc(m.errs.join(", "))}) because Wikipedia was busy or unreachable. Close this and run it again; finished lookups are remembered.</div>`:""}
+  </div>
+  <footer><span class="small muted">A photo applies to the driver in every series and season.</span><span class="sp"></span><button class="btn pri" data-act="photoApply" ${n?"":"disabled"}>Apply ${n}</button></footer></div>`}
+async function photoRun(m){
+  const names=new Map();
+  Object.values(docs).forEach(dd=>{if(dd&&dd.drivers)dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(!key)return;const o=names.get(key);if(!o)names.set(key,{name:x.name.trim(),cur:x.photo||""});else if(!o.cur&&x.photo)o.cur=x.photo})});
+  const list=[...names.values()];m.total=list.length;m.done=0;m.status="running";m.rows=[];m.miss=[];m.errs=[];renderModal();
+  let q=0,fail=0;
+  const work=async()=>{while(q<list.length&&ui.modal===m){const it=list[q++];
+    try{const r=await photoFind(it.name,true);if(r)m.rows.push({name:it.name,cur:it.cur,photo:r.photo,label:r.label,desc:r.desc,use:!it.cur});else m.miss.push(it.name)}
+    catch(e){if(e.message==="nodriver"||e.message==="nophoto")m.miss.push(it.name);else{fail++;m.errs.push(it.name);if(fail>=6&&!m.rows.length){q=list.length}}}
+    m.done++;if(m.done%3===0||m.done===m.total)if(ui.modal===m)renderModal()}};
+  await Promise.all([work(),work(),work()]);
+  if(ui.modal!==m)return;
+  m.rows.sort((a,b)=>a.name.localeCompare(b.name));m.status="done";renderModal();
+}
+function picFit(src){return new Promise((ok,no)=>{const im=new Image();im.onload=()=>{const S=240,c=document.createElement("canvas");c.width=c.height=S;const x=c.getContext("2d"),w=im.naturalWidth,h=im.naturalHeight,sq=Math.min(w,h),sx=(w-sq)/2,sy=h>w?(h-sq)*0.12:(h-sq)/2;x.fillStyle="#222";x.fillRect(0,0,S,S);x.drawImage(im,sx,sy,sq,sq,0,0,S,S);try{ok(c.toDataURL("image/jpeg",.8))}catch(e){no(e)}};im.onerror=()=>no(new Error("bad image"));im.src=src})}
+function setPhoto(dr,v){const k=dr.name.trim().toLowerCase();Object.keys(docs).forEach(did=>{const dd=docs[did];if(!dd||!dd.drivers)return;let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===k&&(z.photo||"")!==(v||"")){if(v)z.photo=v;else delete z.photo;ch=true}});if(ch)touch(did)})}
+async function photoFind(name,full){
+  const r=await wdLookup(name,false);if(!r)throw new Error("nodriver");
+  let u="";
+  if(r.img){try{const q=await wGet("https://commons.wikimedia.org/w/api.php?format=json&origin=*&action=query&prop=imageinfo&iiprop=url&iiurlwidth=500&titles="+encodeURIComponent("File:"+r.img),{timeout:15000});const pg=Object.values((q.query&&q.query.pages)||{})[0],ii=pg&&pg.imageinfo&&pg.imageinfo[0];u=ii&&(ii.thumburl||ii.url)||""}catch(e){}}
+  if(!u){try{const q=await wGet("https://en.wikipedia.org/w/api.php?format=json&origin=*&action=query&redirects=1&prop=pageimages&piprop=thumbnail&pithumbsize=500&titles="+encodeURIComponent(r.label),{timeout:15000});const pg=Object.values((q.query&&q.query.pages)||{})[0];u=pg&&pg.thumbnail&&pg.thumbnail.source||""}catch(e){}}
+  if(!u)throw new Error("nophoto");
+  const resp=await fetch(u);if(!resp.ok)throw new Error("net");const blob=await resp.blob(),ou=URL.createObjectURL(blob);
+  try{const ph=await picFit(ou);return full?{photo:ph,label:r.label,desc:r.desc}:ph}finally{URL.revokeObjectURL(ou)}
+}
 const natLink=x=>x?`<a href="#" class="tl" data-act="country" data-n="${esc(natNorm(x))}">${natHtml(x)}</a>`:"";
 function ctyData(docsL){
   const m=agg(docsL,(dd,x)=>x.name.trim().toLowerCase()),g=new Map(),F=["starts","wins","poles","t5","t10","led","dnf","sf"];
@@ -1329,13 +1393,64 @@ async function wdNat(e){
   }catch(err){}
   return "";
 }
-async function wdLookup(name,wantNat){
+const US_ST={"Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA","Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA","Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA","Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Maryland":"MD","Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS","Missouri":"MO","Montana":"MT","Nebraska":"NE","Nevada":"NV","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT","Virginia":"VA","Washington":"WA","West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY","District of Columbia":"DC"};
+const US_ABBR=new Set(Object.values(US_ST)),US_RE=new RegExp("\\b("+Object.keys(US_ST).sort((a,b)=>b.length-a.length).filter(n=>n!=="District of Columbia").join("|")+")\\b");
+const US_NAME=/^(u\.?\s?s\.?(\s?a\.?)?|united states( of america)?|america)$/i;
+const CA_PROV=/^(Ontario|Quebec|Québec|British Columbia|Alberta|Manitoba|Saskatchewan|Nova Scotia|New Brunswick|Newfoundland and Labrador|Prince Edward Island|Yukon|Northwest Territories|Nunavut)$/i,AU_ST=/^(New South Wales|Victoria|Queensland|Western Australia|South Australia|Tasmania|Australian Capital Territory|Northern Territory)$/i;
+function homeCty(x){x=natNorm(String(x||"").trim());if(!x)return "";if(/^(England|Scotland|Wales|Northern Ireland|Great Britain)$/i.test(x))return "United Kingdom";if(NATS[x])return x;if(CA_PROV.test(x))return "Canada";if(AU_ST.test(x))return "Australia";return ""}
+function fmtHome(raw){
+  let t=String(raw||"").replace(/<!--[\s\S]*?-->/g,"").replace(/<ref[^>]*\/>|<ref[\s\S]*?<\/ref>/g,"").replace(/\{\{(?:nowrap|nobr|small)\|([^{}]*)\}\}/gi,"$1").replace(/\{\{[^{}]*\}\}/g,"").replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g,"$1").replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").replace(/'{2,3}/g,"").replace(/\s+/g," ").trim();
+  if(!t)return "";
+  let parts=t.split(/\s*,\s*/).filter(Boolean),us=false;
+  parts=parts.filter(x=>{if(US_NAME.test(x)){us=true;return false}return true});
+  if(!parts.length)return "";
+  const st=parts.slice(1).find(x=>(US_ST[x]&&(x!=="Georgia"||us))||(US_ABBR.has(x)&&us));
+  if(st)return parts[0]+", "+(US_ST[st]||st);
+  if(us)return "";
+  if(parts.length===1)return US_ST[parts[0]]||US_ABBR.has(parts[0])?"":parts[0];
+  let c="";for(let k=parts.length-1;k>=1&&!c;k--)c=homeCty(parts[k]);
+  return c&&c!==parts[0]?parts[0]+", "+c:parts[0];
+}
+async function wdHome(e,label){
+  const val=(x,P)=>{const c=x&&x.claims&&x.claims[P]&&x.claims[P].find(z=>z.rank!=="deprecated"&&z.mainsnak&&z.mainsnak.datavalue);return c?c.mainsnak.datavalue.value.id:""};
+  const vals=(x,P)=>((x&&x.claims&&x.claims[P])||[]).filter(z=>z.rank!=="deprecated"&&z.mainsnak&&z.mainsnak.datavalue).sort((a,b)=>(!!(a.qualifiers&&a.qualifiers.P582))-(!!(b.qualifiers&&b.qualifiers.P582))).map(z=>z.mainsnak.datavalue.value.id);
+  const lab=x=>(x&&x.labels&&x.labels.en&&x.labels.en.value)||"";
+  const ent=async id=>{const r=await wdJ(WDB+"&action=wbgetentities&props=labels|claims|descriptions&languages=en&ids="+id);return r.entities&&r.entities[id]};
+  const stateOf=t=>{const m=String(t||"").match(US_RE);return m?m[1]:""};
+  let out="";
+  try{
+    const pl=val(e,"P19"),city=pl?await ent(pl):null,cname=city?lab(city).replace(/,.*$/,"").trim():"";
+    if(city&&cname){
+      let cn="";const cids=vals(city,"P17").slice(0,6);
+      if(cids.length){try{const r=await wdJ(WDB+"&action=wbgetentities&props=labels&languages=en&ids="+cids.join("|"));for(const id of cids){const l=r.entities&&r.entities[id]&&r.entities[id].labels&&r.entities[id].labels.en;const c=l&&homeCty(l.value);if(c){cn=c;break}}}catch(err){}}
+      if(US_ST[cname])out="";
+      else if(cn==="United States"||!cn){
+        let st=stateOf((city.descriptions&&city.descriptions.en&&city.descriptions.en.value)||"");
+        if(!st){const seen=new Set([pl]);let layer=vals(city,"P131");
+          for(let d=0;d<6&&layer.length&&!st;d++){const next=[];
+            for(const id of layer.slice(0,4)){if(seen.has(id))continue;seen.add(id);const x=await ent(id);if(!x)continue;const n=lab(x);if(US_ST[n]){st=n;break}
+              st=stateOf((x.descriptions&&x.descriptions.en&&x.descriptions.en.value)||"");if(st)break;next.push(...vals(x,"P131"))}
+            layer=next}}
+        if(st)out=cname+", "+US_ST[st];
+      }else out=cname+", "+cn;
+    }
+  }catch(err){}
+  if(!out&&label){
+    try{const q=await wGet("https://en.wikipedia.org/w/api.php?format=json&origin=*&action=query&redirects=1&prop=revisions&rvprop=content&rvslots=main&rvsection=0&titles="+encodeURIComponent(label),{timeout:15000});
+      const pg=Object.values((q.query&&q.query.pages)||{})[0],rv=pg&&pg.revisions&&pg.revisions[0],tx=rv&&(rv.slots?rv.slots.main["*"]||rv.slots.main.content:rv["*"])||"";
+      const m=tx.match(/\|\s*(?:birth_place|birthplace)\s*=\s*((?:[^\n|]|\|(?![\s\w]*=))*)/i);if(m)out=fmtHome(m[1])}catch(err){}
+  }
+  return out;
+}
+async function wdLookup(name,wantNat,wantHome){
   const key=wdFold(name);let c=wdCache.get(key);
   if(!c){c=wdFind(name);wdCache.set(key,c)}
   let r;try{r=await c}catch(err){wdCache.delete(key);throw err}
   if(!r)return null;
   if(wantNat&&r.nat==null)r.nat=await wdNat(r.e);
-  return {label:r.label,desc:r.desc,y:r.y,mo:r.mo,da:r.da,nat:r.nat||""};
+  if(wantHome&&r.home==null)r.home=await wdHome(r.e,r.label);
+  const p18=r.e&&r.e.claims&&r.e.claims.P18&&r.e.claims.P18[0]&&r.e.claims.P18[0].mainsnak&&r.e.claims.P18[0].mainsnak.datavalue&&r.e.claims.P18[0].mainsnak.datavalue.value;
+  return {label:r.label,desc:r.desc,y:r.y,mo:r.mo,da:r.da,nat:r.nat||"",home:r.home||"",img:typeof p18==="string"?p18:""};
 }
 function ageRef(){let best="";SERIES.forEach(([k])=>{const dd=docs[docId(k,ui.year)];if(dd)dd.races.forEach(r=>{if(r.date&&(!best||r.date<best))best=r.date})});
   const m=best.match(/^(\d{4})-(\d\d)-(\d\d)/);return m?{y:+m[1],mo:+m[2],da:+m[3],txt:best}:{y:ui.year,mo:2,da:15,txt:ui.year+"-02-15"}}
@@ -1397,16 +1512,16 @@ function vDrivers(d0){
   const f=ui.filter.toLowerCase(),by=new Map(),Y=ui.year;
   Object.values(docs).filter(x=>x&&x.series).sort((a,b)=>a.year-b.year).forEach(dd=>{
     dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(!key)return;let e=by.get(key);if(!e){e={name:x.name,retired:false,yrs:new Map()};by.set(key,e)}
-      if(x.retired)e.retired=true;
+      if(x.retired)e.retired=true;if(x.photo&&!e.photo)e.photo=x.photo;if(x.hometown&&!e.home)e.home=x.hometown;
       if(!e.yrs.has(dd.year))e.yrs.set(dd.year,[]);
       e.yrs.get(dd.year).push({s:dd.series,sn:dd.name||dd.series,id:x.id,num:x.num,team:x.team,age:x.age,year:dd.year});if(x.nat&&!e.nat)e.nat=x.nat})});
   const people=[...by.values()].map(e=>{
     const ys=[...e.yrs.keys()].sort((a,b)=>a-b),show=e.yrs.has(Y)?Y:(ys.filter(y=>y<Y).pop()||ys[0]),ent=e.yrs.get(show);
     const age=(ent.find(z=>z.age!==""&&z.age!=null)||{}).age;
-    return {name:e.name,nat:e.nat||"",age:age==null?"":age,ent,year:show,status:e.retired?"Retired":e.yrs.has(Y)?"Active":"Inactive"}});
+    return {name:e.name,photo:e.photo||"",home:e.home||"",nat:e.nat||"",age:age==null?"":age,ent,year:show,status:e.retired?"Retired":e.yrs.has(Y)?"Active":"Inactive"}});
   const cnt={all:people.length,Active:0,Inactive:0,Retired:0};people.forEach(x=>cnt[x.status]++);
   const flt=ui.drvFilter||"all";
-  let list=people.filter(e=>(flt==="all"||e.status===flt)&&(!f||(e.name+" "+e.nat+" "+e.status+" "+e.ent.map(z=>z.num+" "+z.team+" "+z.sn).join(" ")).toLowerCase().includes(f)));
+  let list=people.filter(e=>(flt==="all"||e.status===flt)&&(!f||(e.name+" "+e.nat+" "+(e.home||"")+" "+e.status+" "+e.ent.map(z=>z.num+" "+z.team+" "+z.sn).join(" ")).toLowerCase().includes(f)));
   const c=ui.drvSort||"name",dir=ui.drvDir||1,first=(e,fld)=>String((e.ent[0]||{})[fld]||"");
   list.sort((a,b)=>{let r;
     if(c==="age")r=(a.age===""?999:+a.age)-(b.age===""?999:+b.age);
@@ -1415,16 +1530,17 @@ function vDrivers(d0){
     else if(c==="series")r=first(a,"sn").localeCompare(first(b,"sn"));
     else if(c==="status")r=a.status.localeCompare(b.status);
     else if(c==="nat")r=(a.nat||"~").localeCompare(b.nat||"~");
+    else if(c==="home")r=(a.home||"~").localeCompare(b.home||"~");
     else if(c==="year")r=a.year-b.year;
     else r=a.name.localeCompare(b.name);
     return r*dir||a.name.localeCompare(b.name)});
-  const head=[["name","Driver"],["status","Status"],["age","Age"],["nat","Nationality"],["num","#"],["team","Team"],["series","Series"],["year","Season"]].map(([k,n])=>`<th class="s ${c===k?"on":""}" data-act="sortDrvs" data-v="${k}">${n}${c===k?(dir>0?" ▲":" ▼"):""}</th>`).join("");
+  const head=[["name","Driver"],["status","Status"],["age","Age"],["nat","Nationality"],["home","Hometown"],["num","#"],["team","Team"],["series","Series"],["year","Season"]].map(([k,n])=>`<th class="s ${c===k?"on":""}" data-act="sortDrvs" data-v="${k}">${n}${c===k?(dir>0?" ▲":" ▼"):""}</th>`).join("");
   const pill={Active:"ok",Inactive:"",Retired:"rk"};
   const rows=list.map(e=>{const one=z=>e.ent.map(z).join("");
-    return `<tr><td class="name"><a href="#" data-act="drvAt" data-s="${e.ent[0].s}" data-id="${e.ent[0].id}" data-y="${e.year}">${esc(e.name)}</a></td><td><span class="pill ${pill[e.status]}">${e.status}</span></td><td class="n">${e.age===""?'<span class="muted">–</span>':esc(e.age)}</td><td>${e.nat?natLink(e.nat):'<span class="muted">–</span>'}</td>
+    return `<tr><td class="name"><span style="display:inline-flex;align-items:center;gap:8px">${e.photo?`<img class="pic" src="${e.photo}" alt="">`:`<span class="pic ph" aria-hidden="true">${esc(e.name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase())}</span>`}<a href="#" data-act="drvAt" data-s="${e.ent[0].s}" data-id="${e.ent[0].id}" data-y="${e.year}">${esc(e.name)}</a></span></td><td><span class="pill ${pill[e.status]}">${e.status}</span></td><td class="n">${e.age===""?'<span class="muted">–</span>':esc(e.age)}</td><td>${e.nat?natLink(e.nat):'<span class="muted">–</span>'}</td><td>${e.home?esc(e.home):'<span class="muted">–</span>'}</td>
     <td>${one(z=>`<div><span class="car">${esc(z.num)}</span></div>`)}</td><td>${one(z=>`<div>${teamLink(z)||'<span class="muted">–</span>'}</div>`)}</td><td>${one(z=>`<div><a href="#" data-act="serAt" data-s="${z.s}" data-y="${z.year}">${esc(z.sn)}</a></div>`)}</td><td class="n">${e.year}</td></tr>`}).join("");
   const seg=`<div class="seg" role="group" aria-label="Filter drivers">${[["all","All Drivers",cnt.all],["Active","Active Drivers",cnt.Active],["Inactive","Inactive Drivers",cnt.Inactive],["Retired","Retired Drivers",cnt.Retired]].map(([v,n,k])=>`<button data-act="drvFilter" data-v="${v}" class="${flt===v?"on":""}">${n} ${k}</button>`).join("")}</div>`;
-  return `<div class="row"><h2>Drivers · ${list.length}</h2><span class="sp"></span><input type="text" id="filter" placeholder="Filter by name, team, #, series" value="${esc(ui.filter)}" style="width:240px"><button class="btn" data-act="ageLookup" title="Find real drivers' birth dates and fill in their ages for this season">Look up real ages</button><button class="btn" data-act="natLookup" title="Find real drivers' nationalities">Look up nationalities</button></div>
+  return `<div class="row"><h2>Drivers · ${list.length}</h2><span class="sp"></span><input type="text" id="filter" placeholder="Filter by name, team, #, series" value="${esc(ui.filter)}" style="width:240px"><button class="btn" data-act="ageLookup" title="Find real drivers' birth dates and fill in their ages for this season">Look up real ages</button><button class="btn" data-act="natLookup" title="Find real drivers' nationalities">Look up nationalities</button><button class="btn" data-act="homeLookup" title="Find real drivers' birthplaces">Look up hometowns</button><button class="btn" data-act="photoLookup" title="Find photos of real drivers on Wikipedia">Find all photos</button></div>
     <div class="row">${seg}</div>
     <div class="help"><b>Active</b> drivers are on a roster in the ${Y} season. <b>Inactive</b> drivers raced in other seasons but are not in ${Y}. <b>Retired</b> drivers are the ones marked retired in their profile. The number, team and series shown are from the season in the last column. A driver who runs in more than one series is listed once.</div>
     <div class="card tw">${list.length?`<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No drivers match.</div>'}</div>`;
@@ -2456,11 +2572,11 @@ function modalDriver(){
   const serOpts=[...new Map(allD.map(dd=>[dd.series,dd.name])).entries()];
   const yrs=sDocs.map(dd=>{const dxA=dd.drivers.filter(same),dx=dxA[0],dxs=dx?act(dd,dxA):[];if(!dx)return "";const z=agg([dd],(a,b)=>b.id).get(dx.id);
     const ar=avgRate(dx,"d"),sr=standings(dd).rows.filter(r=>r.pf!==false),ix=dxs.every(q=>q.pf===false)?-1:sr.findIndex(r=>r.id===dx.id),pos=ix>=0&&z.starts>0?ix+1:null,mk=dd.series+"|"+dd.year,col=!!(m0.cl&&m0.cl[mk]),multi=dxs.length>1;return `<tr ${multi?`class="tog" style="cursor:pointer" data-act="carsTog" data-k="${mk}" title="Click to ${col?"show":"hide"} each car"`:""}><td>${multi?(col?"▸ ":"▾ "):""}${dd.year}</td>${multiH?`<td>${esc(dd.name)}</td>`:""}<td class="n">${joinU(dxs.map(q=>q.num)).map(v=>`<span class="car">${esc(v)}</span>`).join(" ")||'<span class="car"></span>'}</td><td class="n">${(dxs.find(q=>q.age!==""&&q.age!=null)||{}).age??"–"}</td><td>${esc(joinU(dxs.map(q=>q.team)).join(" / "))}</td><td class="n">${pos?"<b>"+pos+"</b>":"–"}</td><td class="n">${z.starts}</td><td class="n">${z.wins}</td><td class="n">${z.poles}</td><td class="n">${z.t5}</td><td class="n">${z.t10}</td><td class="n">${z.led}</td><td class="n">${z.avgF!=null?fmt(z.avgF):"–"}</td><td class="n">${z.pts}</td><td class="n">${ar==null?"–":f1(ar)}</td></tr>`+(multi&&!col?(()=>{const rm=agg([dd],(q,w)=>w.id,true);return dxs.map(q=>{const y=rm.get(q.id);if(!y)return "";const qr=avgRate(q,"d");return `<tr class="sub muted"><td></td>${multiH?"<td></td>":""}<td class="n"><span class="car">${esc(q.num)}</span></td><td></td><td>↳ ${esc(q.team||"")}</td><td class="n">–</td><td class="n">${y.starts}</td><td class="n">${y.wins}</td><td class="n">${y.poles}</td><td class="n">${y.t5}</td><td class="n">${y.t10}</td><td class="n">${y.led}</td><td class="n">${y.avgF!=null?fmt(y.avgF):"–"}</td><td class="n">${y.pts}</td><td class="n">${qr==null?"–":f1(qr)}</td></tr>`}).join("")})():"")}).join("");
-  return `<div class="dlg" role="dialog" aria-label="Driver card" data-s="${ui.series}"><header><span class="car" style="font-size:22px">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.num)).join("/")||dr.num)}</span><h3>${esc(dr.name)}</h3><span class="muted">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.team)).join(" / "))} ${joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).length?"· "+esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).join(" / ")):""}</span>${dr.nat?natLink(dr.nat):""}<span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  return `<div class="dlg" role="dialog" aria-label="Driver card" data-s="${ui.series}"><header>${dr.photo?`<img class="pic lg" src="${dr.photo}" alt="">`:""}<span class="car" style="font-size:22px">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.num)).join("/")||dr.num)}</span><h3>${esc(dr.name)}</h3><span class="muted">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.team)).join(" / "))} ${joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).length?"· "+esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).join(" / ")):""}</span>${dr.nat?natLink(dr.nat):""}<span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body"><div class="row" style="gap:12px;margin-bottom:12px"><label class="fld">Series<select data-tf="sf"><option value="all">All series</option>${serOpts.map(([k,n])=>`<option value="${k}" ${sf===k?"selected":""}>${esc(n)}</option>`).join("")}</select></label>
     <label class="fld">Season<select data-tf="yf"><option value="all" ${yf==="all"?"selected":""}>All seasons</option>${yrsL.map(y=>`<option value="${y}" ${yf===y?"selected":""}>${y}</option>`).join("")}</select></label></div>
   <div class="grid2"><div><h3>Driver ratings <span class="muted" style="font-size:15px">avg ${avgRate(dr,"d")==null?"–":f1(avgRate(dr,"d"))}</span></h3>${RATE.filter(r=>r[2]==="d").map(([c,n])=>{const v=rg(dr,c);return `<div class="rt"><span>${n}</span><i><b style="margin-left:${v?v.a:0}%;width:${v?Math.max(v.b-v.a,1):0}%"></b></i><span class="n">${rtxt(v)}</span></div>`}).join("")}</div>
-  <div><h3>${esc(scope)}</h3><dl class="kv" style="margin-top:6px"><dt>Retired</dt><dd><label class="row" style="gap:6px"><input type="checkbox" class="chk" data-ed="drv" data-id="${dr.id}" data-k="retired" ${dr.retired?"checked":""}> <span class="small muted">No longer racing</span></label></dd><dt>Age</dt><dd><input type="number" class="w-s" min="0" max="120" data-ed="drv" data-id="${dr.id}" data-k="age" value="${esc(dr.age==null?"":dr.age)}" aria-label="Age" placeholder="–"></dd><dt>Nationality</dt><dd><input type="text" list="natList" class="w-l" data-ed="drv" data-id="${dr.id}" data-k="nat" value="${esc(dr.nat||"")}" aria-label="Nationality" placeholder="–"> <span class="natflag">${flagHtml(dr.nat)}</span><datalist id="natList">${Object.keys(NATS).map(c=>`<option value="${c}">`).join("")}</datalist></dd>${ents.length===1?`<dt>Points</dt><dd><b>${s.pts}</b></dd>`:""}<dt>Starts</dt><dd>${s.starts}</dd><dt>Crown jewels</dt><dd>${(()=>{const ids=new Set(ents.flatMap(e=>e.dxs.map(q=>q.id)));const w=crownRaces(sel).filter(z=>z.dv&&ids.has(z.dv.id));return w.length?`<b>${w.length}</b> <span class="small muted">${w.map(z=>`<span class="gem">◆</span> ${z.dd.year} ${esc(z.r.name||z.r.track)}`).join(" · ")}</span>`:"0"})()}</dd><dt>Wins / Poles</dt><dd>${s.wins} / ${s.poles}</dd><dt>Top 5 / Top 10</dt><dd>${s.t5} / ${s.t10}</dd><dt>Laps led</dt><dd>${s.led}</dd><dt>Laps completed</dt><dd>${s.laps}</dd><dt>Avg start / finish</dt><dd>${s.avgS!=null?fmt(s.avgS):"–"} / ${s.avgF!=null?fmt(s.avgF):"–"}</dd><dt>DNFs</dt><dd>${s.dnf}</dd></dl></div></div>
+  <div><h3>${esc(scope)}</h3><dl class="kv" style="margin-top:6px"><dt>Retired</dt><dd><label class="row" style="gap:6px"><input type="checkbox" class="chk" data-ed="drv" data-id="${dr.id}" data-k="retired" ${dr.retired?"checked":""}> <span class="small muted">No longer racing</span></label></dd><dt>Age</dt><dd><input type="number" class="w-s" min="0" max="120" data-ed="drv" data-id="${dr.id}" data-k="age" value="${esc(dr.age==null?"":dr.age)}" aria-label="Age" placeholder="–"></dd><dt>Photo</dt><dd><div class="row" style="gap:10px;align-items:flex-end">${dr.photo?`<img class="pic xl" src="${dr.photo}" alt="">`:""}<label class="btn sm" style="cursor:pointer">Upload<input type="file" accept="image/*" data-photo="up" hidden></label><button class="btn sm" data-act="photoFind" ${ui.modal.picBusy?"disabled":""}>${ui.modal.picBusy?"Searching…":"Find on Wikipedia"}</button>${dr.photo?`<button class="btn sm" data-act="photoDel">Remove</button>`:""}</div>${ui.modal.picMsg?`<div class="small muted">${esc(ui.modal.picMsg)}</div>`:""}<div class="small muted">Saved small on this device&#39;s copy of your league. Wikipedia photos come from Wikimedia Commons, so check each image&#39;s license before sharing.</div></dd><dt>Nationality</dt><dd><input type="text" list="natList" class="w-l" data-ed="drv" data-id="${dr.id}" data-k="nat" value="${esc(dr.nat||"")}" aria-label="Nationality" placeholder="–"> <span class="natflag">${flagHtml(dr.nat)}</span><datalist id="natList">${Object.keys(NATS).map(c=>`<option value="${c}">`).join("")}</datalist></dd><dt>Hometown</dt><dd><input type="text" class="w-l" data-ed="drv" data-id="${dr.id}" data-k="hometown" value="${esc(dr.hometown||"")}" aria-label="Hometown" placeholder="City, State"></dd>${ents.length===1?`<dt>Points</dt><dd><b>${s.pts}</b></dd>`:""}<dt>Starts</dt><dd>${s.starts}</dd><dt>Crown jewels</dt><dd>${(()=>{const ids=new Set(ents.flatMap(e=>e.dxs.map(q=>q.id)));const w=crownRaces(sel).filter(z=>z.dv&&ids.has(z.dv.id));return w.length?`<b>${w.length}</b> <span class="small muted">${w.map(z=>`<span class="gem">◆</span> ${z.dd.year} ${esc(z.r.name||z.r.track)}`).join(" · ")}</span>`:"0"})()}</dd><dt>Wins / Poles</dt><dd>${s.wins} / ${s.poles}</dd><dt>Top 5 / Top 10</dt><dd>${s.t5} / ${s.t10}</dd><dt>Laps led</dt><dd>${s.led}</dd><dt>Laps completed</dt><dd>${s.laps}</dd><dt>Avg start / finish</dt><dd>${s.avgS!=null?fmt(s.avgS):"–"} / ${s.avgF!=null?fmt(s.avgF):"–"}</dd><dt>DNFs</dt><dd>${s.dnf}</dd></dl></div></div>
   <h3 style="margin-top:16px">By season</h3><div class="tw"><table><thead><tr><th>Year</th>${multiH?"<th>Series</th>":""}<th class=n>#</th><th class=n>Age</th><th>Team</th><th class=n title="Final points position, for drivers running for points">Pos</th><th class=n>Starts</th><th class=n>Wins</th><th class=n>Poles</th><th class=n>T5</th><th class=n>T10</th><th class=n>Led</th><th class=n>Avg fin</th><th class=n>Pts</th><th class=n>Avg rating</th></tr></thead><tbody>${yrs}</tbody></table></div>
   ${(()=>{const xs=(d.exh||[]).map(ev=>{const x=(ev.res||[]).find(z=>z.d===dr.id);return x&&!ui.logCrown&&(!ui.logWins||x.f===1)?`<tr><td><a href="#" data-act="exrace" data-id="${ev.id}" data-from="${dr.id}">${esc(ev.name)||"Event"}</a></td><td>${esc(ev.kind||"")}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td></tr>`:""}).join("");return xs?`<h3 style="margin-top:16px">${d.year} exhibitions</h3><div class="tw"><table><thead><tr><th>Event</th><th>Type</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th></tr></thead><tbody>${xs}</tbody></table></div>`:""})()}
   <div class="row" style="margin-top:16px"><h3>${yf==="all"?"Race log":yf+" race log"}</h3><span class="sp"></span>${logSeg()}</div>${log?`<div class="tw"><table><thead><tr>${lyh}<th class=n>#</th><th>Race</th><th>Track</th><th class=n>Car</th><th>Team</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th><th class=n title="Gap to the race leader">Interval</th><th class=n>Pts</th></tr></thead><tbody>${log}</tbody></table></div>`:'<p class="muted">'+(ui.logWins?"No wins for this selection.":"No results yet for this selection.")+'</p>'}</div></div>`;
@@ -2469,7 +2585,7 @@ function renderModal(){withHidden(renderModal0)}
 function renderModal0(){
   const el=$("#modal");
   if(!ui.modal){el.innerHTML="";return}
-  el.innerHTML=ui.modal.type==="nats"?modalNats():ui.modal.type==="simseason"?modalSimSeason():ui.modal.type==="help"?modalHelp():ui.modal.type==="numprof"?modalNum():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="dlu"?modalDlu():ui.modal.type==="ages"?modalAges():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="country"?modalCountry():ui.modal.type==="points"?modalPoints():ui.modal.type==="rlook"?modalRLook():ui.modal.type==="gen"?modalGen():ui.modal.type==="track"?modalTrack():ui.modal.type==="gfx"?modalGfx():modalDriver();
+  el.innerHTML=ui.modal.type==="nats"?modalNats():ui.modal.type==="homes"?modalHomes():ui.modal.type==="photos"?modalPhotos():ui.modal.type==="simseason"?modalSimSeason():ui.modal.type==="help"?modalHelp():ui.modal.type==="numprof"?modalNum():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="dlu"?modalDlu():ui.modal.type==="ages"?modalAges():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="country"?modalCountry():ui.modal.type==="points"?modalPoints():ui.modal.type==="rlook"?modalRLook():ui.modal.type==="gen"?modalGen():ui.modal.type==="track"?modalTrack():ui.modal.type==="gfx"?modalGfx():modalDriver();
   if(ui.modal.type==="gfx")gfxDraw();
 }
 function openRace(id,exh){
@@ -2922,6 +3038,9 @@ const ACT={
   exKind:b=>{ui.exKind=b.dataset.v},
   exportCars:()=>{exportCars();return "nr"},
   carPick:()=>{$("#carFile").click();return "nr"},
+  photoDel:()=>{const d=cur(),dr=ui.modal&&ui.modal.type==="driver"&&drvOf(d,ui.modal.id);if(!dr)return "nr";setPhoto(dr,"");ui.modal.picMsg="";render();renderModal();return "nr"},
+  photoFind:()=>{const m=ui.modal,d=cur(),dr=m&&m.type==="driver"&&drvOf(d,m.id);if(!dr||m.picBusy)return "nr";m.picBusy=true;m.picMsg="";renderModal();
+    photoFind(dr.name).then(v=>{setPhoto(dr,v);m.picMsg=""}).catch(e=>{m.picMsg=e.message==="nodriver"?"Couldn't find "+dr.name+" on Wikipedia/Wikidata.":e.message==="nophoto"?"Found "+dr.name+" but there is no photo on Wikipedia. Use Upload instead.":"Couldn't download the photo ("+e.message+"). Try again or use Upload."}).then(()=>{m.picBusy=false;if(ui.modal===m){render();renderModal()}});return "nr"},
   country:b=>{const n=b.dataset.n;if(!Object.values(docs).some(dd=>dd&&((dd.drivers&&dd.drivers.some(x=>natNorm(x.nat)===n))||(dd.teams&&Object.values(dd.teams).some(q=>q&&natNorm(q.nat)===n))))){toast("Nothing from that country");return "nr"}ui.modal={type:"country",n};renderModal();return "nr"},
   team:b=>{const k=String(b.dataset.t).trim().toLowerCase();if(!Object.values(docs).some(dd=>dd&&dd.drivers&&dd.drivers.some(x=>teamKey(x)===k))){toast("That team isn't on any roster");return "nr"}ui.modal={type:"team",team:b.dataset.t};renderModal();return "nr"},
   exadd:()=>{const d=cur();d.exh=d.exh||[];const k=($("#exKind")||{}).value||"Other";d.exh.push({id:uid(),date:"",name:k,kind:k,track:"",laps:"",done:false,res:[]});touch(docId(d.series,d.year))},
@@ -3005,6 +3124,10 @@ const ACT={
   calNav:b=>{const v=b.dataset.v;if(v==="today"){ui.cal=null;ui.calFor=null;return}const c=calMonth(),[y,m]=c.split("-").map(Number),dt=new Date(Date.UTC(y,m-1+(+v),1));ui.cal=dt.getUTCFullYear()+"-"+String(dt.getUTCMonth()+1).padStart(2,"0");ui.calFor=ui.year},
   calOpen:b=>{const cm0=calMonth(),yy=+b.dataset.y;if(yy&&yy!==ui.year&&docs[docId(b.dataset.s,yy)]){ui.year=yy;ui.cal=cm0;ui.calFor=yy}ui.series=b.dataset.s;openRace(b.dataset.id,b.dataset.x==="1")},
   rateGroup:b=>{ui.rateGroup=b.dataset.v},
+  homeLookup:()=>{const m={type:"homes",over:true,rows:[],miss:[],errs:[],status:"running",done:0,total:0};ui.modal=m;renderModal();homeRun(m);return "nr"},
+  homeApply:()=>{const m=ui.modal,sel=m.rows.filter(r=>r.use&&r.home);sel.forEach(r=>{const v=r.home.replace(/\s+/g," ").trim();Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===r.name.toLowerCase()){z.hometown=v;ch=true}});if(ch)touch(did)}})});ui.modal=null;renderModal();render();toast(sel.length+" hometown"+(sel.length===1?"":"s")+" updated")},
+  photoLookup:()=>{const m={type:"photos",rows:[],miss:[],errs:[],status:"running",done:0,total:0};ui.modal=m;renderModal();photoRun(m);return "nr"},
+  photoApply:()=>{const m=ui.modal,sel=m.rows.filter(r=>r.use&&r.photo);sel.forEach(r=>setPhoto({name:r.name},r.photo));ui.modal=null;renderModal();render();toast(sel.length+" photo"+(sel.length===1?"":"s")+" added")},
   natLookup:()=>{const m={type:"nats",rows:[],miss:[],status:"running",done:0,total:0};ui.modal=m;renderModal();natRun(m);return "nr"},
   natApply:()=>{const m=ui.modal,sel=m.rows.filter(r=>r.use&&r.nat);sel.forEach(r=>{Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===r.name.toLowerCase()){z.nat=r.nat;ch=true}});if(ch)touch(did)}})});ui.modal=null;renderModal();toast(sel.length+" nationalit"+(sel.length===1?"y":"ies")+" updated")},
   ageLookup:()=>{const m={type:"ages",rows:[],miss:[],ref:ageRef(),status:"running",done:0,total:0};ui.modal=m;renderModal();ageRun(m);return "nr"},
@@ -3186,6 +3309,10 @@ document.addEventListener("change",e=>{
       if(bad.length)toast("No qualifying session found in: "+bad.join(", "));
       if(ui.modal&&ui.modal.type==="lineup")renderModal()});return}
   if(ui.modal&&ui.modal.type==="gfx"&&t.dataset.gx){const k=t.dataset.gx;ui.modal[k]=k==="top"?(t.value===""?0:Math.max(1,Math.round(num(t.value)))):t.value;gfxDraw();return}
+  if(ui.modal&&ui.modal.type==="homes"&&t.dataset.hover!==undefined){const m=ui.modal;m.over=t.checked;m.rows.forEach(r=>{r.use=!!r.home&&(m.over?r.home!==r.cur:!r.cur)});renderModal();return}
+  if(ui.modal&&ui.modal.type==="homes"&&t.dataset.hu!==undefined){ui.modal.rows[+t.dataset.hu].use=t.checked;renderModal();return}
+  if(ui.modal&&ui.modal.type==="homes"&&t.dataset.hv!==undefined){ui.modal.rows[+t.dataset.hv].home=t.value;return}
+  if(ui.modal&&ui.modal.type==="photos"&&t.dataset.pu!==undefined){ui.modal.rows[+t.dataset.pu].use=t.checked;renderModal();return}
   if(ui.modal&&ui.modal.type==="nats"&&t.dataset.nu!==undefined){ui.modal.rows[+t.dataset.nu].use=t.checked;renderModal();return}
   if(ui.modal&&ui.modal.type==="ages"&&t.dataset.agu!==undefined){ui.modal.rows[+t.dataset.agu].use=t.checked;renderModal();return}
   if(ui.modal&&ui.modal.type==="dlu"&&t.dataset.dlp){const k=t.dataset.dlp;ui.modal[k]=k==="swap"?t.value==="1":k==="size"?(t.value===""?"":Math.max(1,Math.round(num(t.value)))):t.value;setTimeout(renderModal,0);return}
@@ -3220,6 +3347,8 @@ document.addEventListener("change",e=>{
     if(t.dataset.sg){const v=Math.round(num(t.value));mo.adj[t.dataset.id+":"+t.dataset.sg]=v;t.value=v;t.classList.toggle("up",v>0);t.classList.toggle("dn",v<0);return}
     if(t.dataset.sgp){const k=t.dataset.sgp;mo[k]=k==="target"?+t.value:k==="age"?t.checked:Math.max(k==="min"?1:.5,num(t.value));if(k!=="target")mo.adj={};setTimeout(renderModal,0);return}}
   if(t.dataset.pt!==undefined&&ui.modal&&ui.modal.type==="points"&&d){const a=d.settings[ui.modal.key];a[+t.dataset.pt]=Math.max(0,num(t.value));touch(docId(d.series,d.year));return}
+  if(t.dataset.photo==="up"){const f=t.files&&t.files[0],m=ui.modal,dr=m&&m.type==="driver"&&drvOf(cur(),m.id);if(!f||!dr)return;const ou=URL.createObjectURL(f);
+    picFit(ou).then(v=>{setPhoto(dr,v);m.picMsg=""}).catch(()=>{m.picMsg="That file couldn't be read as an image."}).then(()=>{URL.revokeObjectURL(ou);if(ui.modal===m){render();renderModal()}});return}
   if(t.dataset.ct){ui[t.dataset.ct]=t.value;render();return}
   if(t.dataset.tt){if(t.dataset.tt==="ser")ui.teamSer=t.value;else{ui.teamSort=t.value;ui.teamDir=(t.value==="name"||t.value==="avgF")?"asc":"desc"}render();return}
   if(t.dataset.tf&&ui.modal&&["team","driver","numprof","country"].includes(ui.modal.type)){const mo=ui.modal;mo[t.dataset.tf]=t.value==="all"?"all":t.dataset.tf==="yf"?+t.value:t.value;if(t.dataset.tf==="sf")delete mo.yf;renderModal();return}
@@ -3256,6 +3385,7 @@ document.addEventListener("change",e=>{
     if(k==="age"){const a=String(val).trim()===""?"":Math.max(0,Math.min(120,Math.round(num(val))));t.value=a;x.age=a;
       Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd!==d&&dd.year===d.year)dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()){z.age=a;touch(did)}})})}
     else if(k==="nat"){const v=natNorm(val);t.value=v;Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()&&(z.nat||"")!==v){z.nat=v;ch=true}});if(ch&&dd!==d)touch(did)}});x.nat=v}
+    else if(k==="hometown"){const v=String(val).replace(/\s+/g," ").trim();Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()&&(z.hometown||"")!==v){if(v)z.hometown=v;else delete z.hometown;ch=true}});if(ch&&dd!==d)touch(did)}});if(v)x.hometown=v;else delete x.hometown}
     else if(k==="retired"){const on=!!val;Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()&&!!z.retired!==on){z.retired=on;ch=true}});if(ch)touch(did)}});x.retired=on}
     else x[k]=val}}
   else if(ed==="rate"){const x=drvOf(d,t.dataset.id);if(x){x.r=x.r||{};const td=t.closest("td"),ia=td.querySelector('[data-e="a"]'),ib=td.querySelector('[data-e="b"]');
