@@ -1256,8 +1256,17 @@ const wdFold=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCas
 const DEMO={"American":"United States","British":"United Kingdom","English":"England","Scottish":"Scotland","Welsh":"Wales","Northern Irish":"Northern Ireland","Irish":"Ireland","Canadian":"Canada","Mexican":"Mexico","Brazilian":"Brazil","Argentine":"Argentina","Argentinian":"Argentina","Colombian":"Colombia","Chilean":"Chile","Uruguayan":"Uruguay","Venezuelan":"Venezuela","Peruvian":"Peru","Ecuadorian":"Ecuador","Australian":"Australia","New Zealand":"New Zealand","French":"France","German":"Germany","Italian":"Italy","Spanish":"Spain","Portuguese":"Portugal","Dutch":"Netherlands","Belgian":"Belgium","Swiss":"Switzerland","Austrian":"Austria","Swedish":"Sweden","Norwegian":"Norway","Danish":"Denmark","Finnish":"Finland","Icelandic":"Iceland","Polish":"Poland","Czech":"Czech Republic","Slovak":"Slovakia","Hungarian":"Hungary","Romanian":"Romania","Bulgarian":"Bulgaria","Greek":"Greece","Turkish":"Turkey","Russian":"Russia","Ukrainian":"Ukraine","Estonian":"Estonia","Latvian":"Latvia","Lithuanian":"Lithuania","Croatian":"Croatia","Serbian":"Serbia","Slovenian":"Slovenia","Japanese":"Japan","Chinese":"China","Korean":"South Korea","South Korean":"South Korea","Indian":"India","Thai":"Thailand","Malaysian":"Malaysia","Indonesian":"Indonesia","Singaporean":"Singapore","Filipino":"Philippines","Taiwanese":"Taiwan","South African":"South Africa","Monegasque":"Monaco","Emirati":"United Arab Emirates","Saudi":"Saudi Arabia","Israeli":"Israel","Lebanese":"Lebanon","Moroccan":"Morocco","Egyptian":"Egypt","Kenyan":"Kenya","Nigerian":"Nigeria","Puerto Rican":"Puerto Rico","Jamaican":"Jamaica","Cuban":"Cuba","Dominican":"Dominican Republic","Costa Rican":"Costa Rica","Guatemalan":"Guatemala","Panamanian":"Panama","Paraguayan":"Paraguay","Bolivian":"Bolivia","Trinidadian":"Trinidad and Tobago","Bahraini":"Bahrain","Qatari":"Qatar","Luxembourgish":"Luxembourg","Liechtensteiner":"Liechtenstein","Belarusian":"Belarus","Kazakh":"Kazakhstan","Azerbaijani":"Azerbaijan","Georgian":"Georgia","Armenian":"Armenia"};
 const DEMO_RE=Object.keys(DEMO).sort((a,b)=>b.length-a.length).map(k=>[new RegExp("\\b"+k+"\\b","i"),DEMO[k]]);
 const wdWait=ms=>new Promise(z=>setTimeout(z,ms));
-async function wdJ(u){for(let a=0;;a++){let r;try{r=await fetch(u)}catch(e){if(a>=3)throw e;await wdWait(600*2**a);continue}
-  if(r.ok)return r.json();if((r.status===429||r.status>=500)&&a<3){await wdWait(800*2**a);continue}throw new Error("http")}}
+const wCache=new Map();
+function wGet(u,o){o=o||{};if(wCache.has(u))return wCache.get(u);
+  const tries=o.tries||3,to=o.timeout||20000;
+  const p=(async()=>{for(let a=0;;a++){const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),to);let r;
+    try{r=await fetch(u,{signal:ac.signal})}catch(e){clearTimeout(tm);if(a>=tries-1)throw new Error(e&&e.name==="AbortError"?"timed out":"network error");await wdWait(500*2**a+Math.random()*300);continue}
+    try{if(r.ok)return await r.json();if((r.status===429||r.status>=500)&&a<tries-1){clearTimeout(tm);await wdWait(900*2**a+Math.random()*400);continue}if(!r.ok)throw new Error("http "+r.status)}
+    catch(e){if(/^http/.test(e.message)||a>=tries-1)throw e.name==="AbortError"?new Error("timed out"):e;await wdWait(500*2**a);continue}
+    finally{clearTimeout(tm)}}})();
+  if(wCache.size>80)wCache.delete(wCache.keys().next().value);
+  wCache.set(u,p);p.catch(()=>{if(wCache.get(u)===p)wCache.delete(u)});return p}
+const wdJ=u=>wGet(u,{timeout:15000});
 const WDB="https://www.wikidata.org/w/api.php?format=json&origin=*";
 async function wdFind(name){
   const cl=String(name).replace(/\[[^\]]*\]|\([^)]*\)|"[^"]*"|“[^”]*”|[†‡*#§^]|\s\/\s.*$|\s+R$/g," ").replace(/\s+/g," ").trim();
@@ -2109,10 +2118,10 @@ const realType=nm=>{const n=String(nm||"").toLowerCase();
   if(/martinsville|bristol|knoxville|richmond|dover|iowa|milwaukee|new hampshire|rockingham|wilkesboro|bowman|lucas oil|irp|phoenix/.test(n))return "Short track";
   return "Intermediate"};
 
-const WP_SER=[["cup","Cup Series",["NASCAR Cup Series","NASCAR Sprint Cup Series","NASCAR Nextel Cup Series","NASCAR Winston Cup Series","NASCAR Monster Energy NASCAR Cup Series","NASCAR Grand National Series","NASCAR Strictly Stock Series"]],
+const WP_SER=[["cup","Cup Series",["NASCAR Cup Series","NASCAR Sprint Cup Series","NASCAR Nextel Cup Series","NASCAR Winston Cup Series","Monster Energy NASCAR Cup Series","NASCAR Monster Energy NASCAR Cup Series","NASCAR Grand National Series","NASCAR Strictly Stock Series"]],
  ["busch","O'Reilly Series",["NASCAR O'Reilly Auto Parts Series","NASCAR Xfinity Series","NASCAR Nationwide Series","NASCAR Busch Series","NASCAR Busch Grand National Series"]],
- ["truck","Truck Series",["NASCAR Craftsman Truck Series","NASCAR Camping World Truck Series","NASCAR Gander RV & Outdoors Truck Series","NASCAR Gander Outdoors Truck Series","NASCAR Truck Series","NASCAR SuperTruck Series"]],
- ["indycar","IndyCar",["IndyCar Series","Champ Car World Series","CART season","IndyCar Series season","Indy Racing League season"]],
+ ["truck","Truck Series",["NASCAR Craftsman Truck Series","NASCAR Camping World Truck Series","NASCAR Truck Series","NASCAR Gander RV & Outdoors Truck Series","NASCAR Gander RV & Outdoors Truck Series","NASCAR Gander Outdoors Truck Series","NASCAR Truck Series","NASCAR SuperTruck Series"]],
+ ["indycar","IndyCar",["IndyCar Series","IRL IndyCar Series","Champ Car World Series season","Champ Car World Series","CART PPG World Series","PPG Indy Car World Series","CART season","Indy Car World Series","IndyCar Series season","Indy Racing League season","Indy Racing League","Indy Lights"]],
  ["f1","Formula 1",["Formula One World Championship","Formula One season"]]];
 const wpSkip=/all-star|all star|the winston|shootout|\bduels?\b|\bclash\b|busch clash|exhibition|\bpre-season\b|non-?championship|invitational|last chance|\bheat\b/i;
 const MONS=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
@@ -2129,14 +2138,15 @@ function wpRoster(html){
   const doc=new DOMParser().parseFromString(html,"text/html"),out=[],seen=new Set();
   doc.querySelectorAll("table.wikitable").forEach(tbl=>{
     const g=wpGrid(tbl);if(g.length<3)return;
-    const hi=g.findIndex(r=>r&&r.some(x=>/^drivers?\b/i.test(String(x||"").trim())));if(hi<0||hi>2)return;
+    const isDH=x=>/\bdrivers?\b/i.test(x)&&!/crew|co-?driver|reserve|test|third|development|simulator|winn|pole|fastest/i.test(x);
+    const hi=g.findIndex(r=>r&&r.some(x=>isDH(String(x||"").trim())));if(hi<0||hi>2)return;
     const h=g[hi].map(x=>String(x||"").toLowerCase().trim());
     if(h.some(x=>/^(pos|points|pts|poles|wins|starts|top)/.test(x)))return;
     if(h.some(x=>/winn(er|ing)|fastest|pole position|report|circuit|^date$|grand prix/.test(x)))return;
     if(g.slice(0,hi+1).some(r=>(r||[]).some(x=>/practice|reserve|test driver|third driver|development|simulator/i.test(String(x||"")))))return;
     const tStart=out.length;
     const body=g.slice(hi+1).filter(r=>r&&r.length>=3),n=body.length;if(!n)return;
-    const di=h.findIndex(x=>/^drivers?\b/.test(x));
+    const di=h.findIndex(x=>isDH(x));
     const frac=(c,re)=>body.filter(r=>re.test(String(r[c]||"").split("|")[0].trim())).length/n;
     const cols=h.map((_,c)=>c);
     let ni=h.findIndex(x=>/^(no\.?|#|number|car no\.?|car number)(\b|$)/.test(x));
@@ -2166,6 +2176,7 @@ function wpRoster(html){
       let team=ti>=0?tclean(String(row[ti]||"").split("|").map(x=>x.replace(/\s*\[.*?\]/g,"").trim()).filter(Boolean).join(" ")):"";
       const bad=x=>!x||NUM.test(x)||(!hb&&MK.test(x)&&x.length<30);
       if(!hb&&bad(team)){team=cols.filter(c=>c!==di&&c!==numC&&!skipH(c)).map(c=>tclean(cell(c))).find(x=>x&&!bad(x)&&!/^(all|full|\d+\s*[–-]\s*\d+|tba|tbd|—|-)/i.test(x)&&x.length>2&&x!==cell(di))||""}
+      make=String(make||"").replace(/\[.*?\]/g,"").replace(/\s*\(.*$/,"").replace(/[\s\u00a0]+#?\d+(\s*[,&\/]\s*#?\d+)*$/,"").replace(/\s+/g," ").trim();
       if(!make)make=lastM;else lastM=make;
       if(!team)team=lastT;else lastT=team;
       const rounds=ri>=0?String(row[ri]||"").trim():"";
@@ -2259,30 +2270,36 @@ function wpParse(html,y,ser){
     if(best&&best.length>=6)break}
   return best||[]}
 async function wpLookup(m){
-  const ser=WP_SER.find(x=>x[0]===m.s),base="https://en.wikipedia.org/w/api.php?format=json&origin=*",j=async u=>{const r=await fetch(u);if(!r.ok)throw new Error("http "+r.status);return r.json()};
+  const ser=WP_SER.find(x=>x[0]===m.s),base="https://en.wikipedia.org/w/api.php?format=json&origin=*",j=u=>wGet(u,{timeout:25000});
   const cands=ser[2].map(n=>m.y+" "+n);
-  const q=await j(base+"&action=query&redirects=1&prop=info&titles="+encodeURIComponent(cands.join("|")));
-  const redir={};(q.query.normalized||[]).forEach(x=>redir[x.from]=x.to);(q.query.redirects||[]).forEach(x=>redir[x.from]=x.to);
-  const ok=new Set(Object.values(q.query.pages||{}).filter(p=>p.missing===undefined&&p.invalid===undefined).map(p=>p.title));
-  let title="";for(const c of cands){let t=c;for(let i=0;i<3;i++)if(redir[t])t=redir[t];if(ok.has(t)){title=t;break}}
-  if(!title)throw new Error("nopage");
-  const pg=await j(base+"&action=parse&prop=text&disableeditsection=1&redirects=1&page="+encodeURIComponent(title));
-  const html=pg.parse&&pg.parse.text&&(pg.parse.text["*"]||pg.parse.text);if(!html)throw new Error("nopage");
+  let pg=null,html="",title="";
+  for(const c of cands){const r=await j(base+"&action=parse&prop=text&disableeditsection=1&disabletoc=1&redirects=1&page="+encodeURIComponent(c));
+    if(r&&r.error&&r.error.code&&r.error.code!=="missingtitle"&&r.error.code!=="invalidtitle")throw new Error(r.error.info||r.error.code);
+    const h=r&&r.parse&&r.parse.text&&(r.parse.text["*"]||r.parse.text);if(h){pg=r;html=h;title=r.parse.title||c;break}}
+  if(!html){
+    const KW={cup:/cup|winston|strictly/i,busch:/busch|xfinity|nationwide|o.reilly/i,truck:/truck/i,indycar:/indy|champ car|cart\b|irl\b/i,f1:/formula (one|1)/i},BAD=/\brace\b|\bprix\b|\bresults?\b|statistics|\bat\b|playoffs?|\bchase\b/i,kw=KW[m.s]||/./;
+    let hits=[];try{const sr=await j(base+"&action=query&list=search&srnamespace=0&srlimit=12&srprop=&srsearch="+encodeURIComponent(m.y+" "+ser[1]+" season"));hits=((sr.query&&sr.query.search)||[]).map(x=>x.title)}catch(e){}
+    hits=hits.filter(t=>t.startsWith(m.y)&&kw.test(t)&&!BAD.test(t)&&!/Series (results|statistics)/i.test(t)).slice(0,3);
+    for(const c of hits){try{const r=await j(base+"&action=parse&prop=text&disableeditsection=1&disabletoc=1&redirects=1&page="+encodeURIComponent(c));const h=r&&r.parse&&r.parse.text&&(r.parse.text["*"]||r.parse.text);if(h){html=h;title=r.parse.title||c;break}}catch(e){}}
+  }
+  if(!html)throw new Error("nopage");
   m.title=title;
   if(m.kind==="ratings"){const st=wpStand(html);if(!st)throw new Error("nostand");m.stand=st;const sc=wpParse(html,m.y,m.s);m.types=sc.length===st.ncols?sc.map(r=>RAT_TYPE[realType2(r.track,m.s)]||"spd"):null;ratCalc(m,cur());if(!m.rows.length)throw new Error("noratmatch");return}
   m.rows=m.kind==="roster"?wpRoster(html):wpParse(html,m.y,m.s);if(!m.rows.length)throw new Error(m.kind==="roster"?"noroster":"notable");
-  if(m.kind!=="roster")try{await wpLaps(m,base,j)}catch(e){}}
+  if(m.kind!=="roster"&&m.rows.some(r=>!r.laps&&r.page)){m.lapsBusy=true;wpLaps(m,base,j).catch(()=>{}).then(()=>{m.lapsBusy=false;if(ui.modal===m)renderModal()})}}
 async function wpLaps(m,base,j){
   const need=m.rows.filter(r=>!r.laps&&r.page);if(!need.length)return;
   const ttl=r=>decodeURIComponent(r.page.replace(/^\/wiki\//,"").replace(/#.*$/,"")).replace(/_/g," ");
   const titles=[...new Set(need.map(ttl))],found={};
-  for(let i=0;i<titles.length;i+=40){
-    const part=titles.slice(i,i+40),q=await j(base+"&action=query&redirects=1&prop=revisions&rvprop=content&rvslots=main&titles="+encodeURIComponent(part.join("|")));
+  const chunks=[];for(let i=0;i<titles.length;i+=25)chunks.push(titles.slice(i,i+25));
+  const pull=async(part,sec)=>{const q=await j(base+"&action=query&redirects=1&prop=revisions&rvprop=content&rvslots=main"+(sec?"&rvsection=0":"")+"&titles="+encodeURIComponent(part.join("|")));
     const map={};(q.query.normalized||[]).forEach(x=>map[x.from]=x.to);(q.query.redirects||[]).forEach(x=>map[x.from]=x.to);
     const byT={};Object.values(q.query.pages||{}).forEach(pg=>{const rv=pg.revisions&&pg.revisions[0],tx=rv&&(rv.slots?rv.slots.main["*"]||rv.slots.main.content:rv["*"])||"";byT[pg.title]=tx});
-    part.forEach(t=>{let f=t;for(let k=0;k<3;k++)if(map[f])f=map[f];const tx=byT[f]||"",box=tx.slice(0,6000);
+    let got=0;part.forEach(t=>{let f=t;for(let k=0;k<3;k++)if(map[f])f=map[f];const tx=byT[f]||"",box=tx.slice(0,6000);if(tx)got++;
       let mm=box.match(/\|\s*(?:race_)?distance\s*=[^\n]*?(\d{2,3})\s*(?:\[\[)?laps/i)||box.match(/\|\s*(?:scheduled_)?laps\s*=\s*(\d{2,3})\b/i)||box.match(/\|\s*(?:race_)?distance\s*=\s*(\d{2,3})\s*laps/i);
-      if(mm)found[t]=+mm[1]})}
+      if(mm)found[t]=+mm[1]});return got};
+  const doChunk=async part=>{try{const g=await pull(part,true);if(!g)await pull(part,false)}catch(e){try{await pull(part,false)}catch(e2){}}};
+  let ci=0;await Promise.all([0,1,2].map(async()=>{while(ci<chunks.length)await doChunk(chunks[ci++])}));
   need.forEach(r=>{const v=found[ttl(r)];if(v)r.laps=v})}
 async function wpRun(m){try{await wpLookup(m);m.status="done"}catch(e){m.status="err";m.msg=e.message==="nopage"?"Wikipedia has no season page with that name for "+m.y+".":e.message==="notable"?"Found the Wikipedia page ("+m.title+") but couldn't read a schedule table from it.":e.message==="noroster"?"Found the Wikipedia page ("+m.title+") but couldn't find a teams and drivers table on it.":e.message==="nostand"?"Found the Wikipedia page ("+m.title+") but couldn't find a drivers' standings table with race-by-race finishes on it.":e.message==="noratmatch"?"Read the results from "+m.title+", but none of the drivers with enough starts are on your roster. Add them on the Roster tab first, or lower Min starts.":"Couldn't reach Wikipedia ("+e.message+"). Check your connection."}
   if(ui.modal===m)renderModal()}
@@ -2317,7 +2334,7 @@ function modalRLook(){
   const m=ui.modal,ser=WP_SER.find(x=>x[0]===m.s),d=cur(),n=m.rows.filter(x=>x.use).length;
   const body=m.status==="run"?`<div class="empty">Looking up the ${m.y} ${esc(ser[1])} schedule on Wikipedia…</div>`:m.status==="err"?`<div class="empty">${esc(m.msg)}</div>`:
    `<div class="card tw" style="max-height:420px;overflow:auto"><table><thead><tr><th></th><th>Date</th><th>Race</th><th>Track</th><th class="n">Laps</th></tr></thead><tbody>${m.rows.map((r,i)=>`<tr><td><input type="checkbox" class="chk" data-rl="${i}" ${r.use?"checked":""}></td><td>${esc(r.date.slice(5))}</td><td>${esc(r.name)}</td><td>${esc(r.track)}</td><td class="n">${r.laps?(r.approx?"~":"")+r.laps:""}</td></tr>`).join("")}</tbody></table></div>
-   <div class="small muted">From Wikipedia: ${esc(m.title)}. Check the list before you add it. Laps missing from the season table are read from each race's own Wikipedia page. A ~ means the laps were worked out from the race distance and track length. Blank laps could not be found. Dates move into the ${d.year} season you have open.</div>`;
+   ${m.lapsBusy?`<div class="small muted">Looking up lap counts from the race pages…</div>`:""}<div class="small muted">From Wikipedia: ${esc(m.title)}. Check the list before you add it. Laps missing from the season table are read from each race's own Wikipedia page. A ~ means the laps were worked out from the race distance and track length. Blank laps could not be found. Dates move into the ${d.year} season you have open.</div>`;
   return `<div class="dlg" role="dialog" aria-label="Look up schedule" data-s="${ui.series}" style="max-width:820px"><header><h3>Look up ${m.y} ${esc(ser[1])} schedule</h3><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body">${body}</div>
   <footer><span class="sp"></span>${m.status==="done"?`<button class="btn" data-act="rlAdd" ${n?"":"disabled"}>Add ${n} races</button><button class="btn pri" data-act="rlAdd" data-v="replace" ${d.races.length?'data-confirm="1"':""} ${n?"":"disabled"}>Replace schedule</button>`:""}</footer></div>`}
