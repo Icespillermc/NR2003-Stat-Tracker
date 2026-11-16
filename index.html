@@ -115,6 +115,7 @@ input.ovr{border-color:var(--warn)!important;background:var(--hl)!important}
 .tst b{font-family:var(--f-disp);font-size:22px}
 .tst small{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .gem{color:#c9971c;font-size:.85em}
+.flag{display:inline-block;width:24px!important;height:18px!important;min-width:24px;max-width:none!important;flex:none;object-fit:cover;vertical-align:-4px;border-radius:2px;box-shadow:0 0 0 1px rgba(128,128,128,.35)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
 .tiles div{padding:9px 12px;border:1px solid var(--line);border-radius:6px}
 .tiles b{font-family:var(--f-disp);font-size:24px;display:block;line-height:1.1}
@@ -188,7 +189,7 @@ function refreshSeries(){
 const codesOf=k=>{const dd=docsFor(k).find(x=>x.code);return dd?String(dd.code).split(/[\s,;]+/).filter(Boolean):[]};
 const SER_BASE={NCS:"cup",NBS:"busch",NXS:"busch",NNS:"busch",NTS:"truck",NCTS:"truck",CTS:"truck"};
 function codeMap(){const m=Object.assign({},SER_BASE);SERIES.forEach(([k])=>codesOf(k).forEach(c=>{m[c.toUpperCase()]=k}));return m}
-const VIEWS=[["overview","Overview"],["schedule","Schedule"],["exhib","Exhibitions"],["standings","Standings"],["stats","Stats"],["teams","Teams"],["tracks","Tracks"],["history","History"],["drivers","Drivers"],["roster","Roster"],["ratings","Ratings"],["setup","Setup"]];
+const VIEWS=[["overview","Overview"],["schedule","Schedule"],["exhib","Exhibitions"],["standings","Standings"],["stats","Stats"],["teams","Teams"],["countries","Nationalities"],["tracks","Tracks"],["history","History"],["drivers","Drivers"],["roster","Roster"],["ratings","Ratings"],["setup","Setup"]];
 const RATE=[["agg","Aggression","d"],["con","Consistency","d"],["fin","Finishing","d"],["qua","Qualifying","d"],["st","Short track","d"],["spd","Speedway","d"],["ss","Superspeedway","d"],["rd","Road course","d"],["pcc","Pit consistency","p"],["pcs","Pit speed","p"],["pcg","Pit strategy","p"],["vae","Aero","v"],["vch","Chassis","v"],["ven","Engine","v"],["vre","Reliability","v"]];
 const AIMAP={aiParamDriverAggression:"agg",aiParamDriverConsistency:"con",aiParamDriverFinishing:"fin",aiParamDriverQualifying:"qua",aiParamDriverShortTrack:"st",aiParamDriverSpeedway:"spd",aiParamDriverSuperspeedway:"ss",aiParamDriverRoadCourse:"rd",aiParamPitcrewConsistency:"pcc",aiParamPitcrewSpeed:"pcs",aiParamPitcrewStrategy:"pcg",aiParamVehicleAero:"vae",aiParamVehicleChassis:"vch",aiParamVehicleEngine:"ven",aiParamVehicleReliability:"vre"};
 function rg(x,k){const v=x.r&&x.r[k];if(v==null)return null;return typeof v==="number"?{a:Math.round(v),b:Math.round(v)}:{a:Math.round(v.a),b:Math.round(v.b)}}
@@ -488,13 +489,13 @@ function agg(list,keyFn,raw){
     const dm=new Map(d.drivers.map(x=>[x.id,x]));
     const get=dr=>{
       const key=keyFn(d,dr);let s=m.get(key);
-      if(!s){s={key,pts:0,reg:0,post:0,regWins:0,starts:0,wins:0,t5:0,t10:0,t20:0,poles:0,led:0,dnf:0,sf:0,ss:0,best:99,laps:0,stw:0,stp:0,pp:0,dp:0};Object.assign(s,{id:dr.id,name:dr.name,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf,rookie:dr.rookie});m.set(key,s)}
+      if(!s){s={key,pts:0,reg:0,post:0,regWins:0,starts:0,wins:0,t5:0,t10:0,t20:0,poles:0,led:0,dnf:0,sf:0,ss:0,best:99,laps:0,stw:0,stp:0,pp:0,dp:0};Object.assign(s,{id:dr.id,name:dr.name,nat:dr.nat,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf,rookie:dr.rookie});m.set(key,s)}
       return s;
     };
     const prim=new Map(),als=new Map();d.drivers.forEach(x=>{const k=String(x.name||"").trim().toLowerCase();if(!k)return;if(!prim.has(k))prim.set(k,x);else if(!raw)als.set(x.id,prim.get(k))});
     const effc=new Map();
     const eff=id=>{const x=dm.get(id);if(!x)return null;const pr=als.get(id);if(!pr)return x;let e=effc.get(id);if(!e){e=Object.assign({},x,{id:pr.id,name:pr.name,pf:pr.pf||x.pf,rookie:pr.rookie||x.rookie});effc.set(id,e)}return e};
-    d.drivers.forEach(dr=>{const pr=als.get(dr.id);if(pr){const e=eff(dr.id),s=get(e),ks=keyFn(d,e);if(ks===e.id||ks===String(e.name).trim().toLowerCase()){(s._w||(s._w={n:[],t:[],i:[]})).n.push(String(dr.num==null?"":dr.num).trim());s._w.t.push(dr.team||"");s._w.i.push(dr.id)}return}const s=get(dr);Object.assign(s,{id:dr.id,name:dr.name,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf||[...als].some(([a,b])=>b===dr&&(dm.get(a)||{}).pf),rookie:dr.rookie});const ks=keyFn(d,dr);if(als.size&&(ks===dr.id||ks===String(dr.name).trim().toLowerCase())){const w=s._w||(s._w={n:[],t:[],i:[]});w.n.push(String(dr.num==null?"":dr.num).trim());w.t.push(dr.team||"");w.i.push(dr.id)}});
+    d.drivers.forEach(dr=>{const pr=als.get(dr.id);if(pr){const e=eff(dr.id),s=get(e),ks=keyFn(d,e);if(ks===e.id||ks===String(e.name).trim().toLowerCase()){(s._w||(s._w={n:[],t:[],i:[]})).n.push(String(dr.num==null?"":dr.num).trim());s._w.t.push(dr.team||"");s._w.i.push(dr.id)}return}const s=get(dr);Object.assign(s,{id:dr.id,name:dr.name,nat:dr.nat,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf||[...als].some(([a,b])=>b===dr&&(dm.get(a)||{}).pf),rookie:dr.rookie});const ks=keyFn(d,dr);if(als.size&&(ks===dr.id||ks===String(dr.name).trim().toLowerCase())){const w=s._w||(s._w={n:[],t:[],i:[]});w.n.push(String(dr.num==null?"":dr.num).trim());w.t.push(dr.team||"");w.i.push(dr.id)}});
     const dpo=duelPts(d);
     if(dpo.on)(d.exh||[]).forEach(ev=>{if(ev.kind!=="Duel"||!ev.done)return;(ev.res||[]).forEach(x=>{const dr0=dm.get(x.d),v=dpo.pts[x.f-1]||0;if(!dr0||!v)return;const s0=get(dr0);s0.pts+=v;s0.dp+=v;if(after)s0.reg+=v})});
     d.races.forEach((r,i)=>{
@@ -573,7 +574,7 @@ function render0(){
   if(!ready&&!Object.keys(docs).length){app.innerHTML=head()+'<div class="wrap"><main><div class="empty">Loading your league…</div></main></div>';return}
   const d=cur();let body="";
   if(!d)body='<div class="empty">No data for this season.</div>';
-  else body={overview:vOverview,schedule:vSchedule,standings:vStandings,stats:vStats,teams:vTeams,exhib:vExhib,tracks:vTracks,history:vHistory,drivers:vDrivers,roster:vRoster,ratings:vRatings,setup:vSetup}[ui.view](d);
+  else body={overview:vOverview,schedule:vSchedule,standings:vStandings,stats:vStats,teams:vTeams,countries:vCountries,exhib:vExhib,tracks:vTracks,history:vHistory,drivers:vDrivers,roster:vRoster,ratings:vRatings,setup:vSetup}[ui.view](d);
   app.setAttribute("data-s",ui.series);
   app.innerHTML=head()+`<div class="wrap"><main>${body}</main></div><div class="small muted" style="text-align:center;padding:6px 16px 26px">© 2026 NR2003 Tracker. All rights reserved. Copying or redistributing this site without permission is not allowed.</div>`;
   if(fid!=null){const f=$("#filter");if(f){f.focus();f.setSelectionRange(fid,fid)}}
@@ -700,7 +701,7 @@ function qualStatus(d,final){
   return {m,n,R,maxRace,isCh,cut:lastRef+1};
 }
 const winAdv0=d=>d.settings.chase.on?!!d.settings.chase.winAdv:!!PO(d).winAdv;
-const stBySeg=()=>`<div class="seg" role="group" aria-label="Standings type">${[["drivers","Drivers"],["owners","Owners"],["rookies","Rookies"]].map(([v,n])=>`<button data-act="stBy" data-v="${v}" class="${(ui.stBy||"drivers")===v?"on":""}">${n}</button>`).join("")}</div>`;
+const stBySeg=()=>`<div class="seg" role="group" aria-label="Standings type">${[["drivers","Drivers"],["owners","Owners"],["teams","Teams"],["rookies","Rookies"]].map(([v,n])=>`<button data-act="stBy" data-v="${v}" class="${(ui.stBy||"drivers")===v?"on":""}">${n}</button>`).join("")}</div>`;
 function ownerRows(d){
   const m=agg([d],(dd,x)=>String(x.num==null?"":x.num).trim()),di=agg([d],(dd,x)=>x.id);
   const rows=[...m.values()].filter(r=>r.key!==""&&r.starts>0);
@@ -709,6 +710,12 @@ function ownerRows(d){
   return rows;
 }
 function gfxStdData(d){
+  if(ui.stBy==="teams"){
+    const R=teamStdRows(d),o=teamStdOpt(d),r1=v=>Math.round(v*10)/10,lead=R.length?R[0].pts:0,done=d.races.filter(r=>r.done).length;
+    const rows=R.map((t,i)=>({pos:t.rank,num:t.cars.size,name:t.name,rookie:false,sub:[...t.drivers].join(", "),pts:r1(t.pts),lead:i&&lead-t.pts>0.004?"-"+r1(lead-t.pts):"",wins:t.wins,t5:t.t5,t10:t.t10,poles:t.poles,led:t.led,avg:t.avgF!=null?fmt(t.avgF):""}));
+    const how=(o.n?(o.season?"top "+o.n+" cars by season points":"best "+o.n+" car"+(o.n===1?"":"s")+" each race"):"all cars")+(o.avg?", average points per car":", total points");
+    return {type:"gfx",title:"Team Standings",sub:[done+" of "+d.races.length+" races",how].join("   ·   "),std:rows,res:[],qual:[],series:d.series,sname:d.name,year:d.year,kind:"std",style:"dark",font:"inter",top:0,cols:"auto",owners:false,teams:true,cut:0,cutLbl:""};
+  }
   const owners=ui.stBy==="owners",hasPost=!!(d.settings.chase.on||PO(d).on),mode=hasPost?(ui.stFilter||"post"):"full",done=d.races.filter(r=>r.done).length;
   const st=z=>({wins:z.wins,t5:z.t5,t10:z.t10,poles:z.poles,led:z.led,avg:z.avgF!=null?fmt(z.avgF):""});
   let rows;
@@ -747,10 +754,40 @@ function vRookies(d){
     <div class="small muted">Drivers marked as rookies on the Roster tab, ranked by <b>${esc(kn)}</b>${k==="avgF"?" (lowest first)":""}. Change the ranking in Setup.${lead&&rows.length?` Current leader: <b>${esc(lead.name)}</b>.`:""}</div>
     <div class="card tw">${rows.length?`<table><thead><tr><th class=n>Pos</th><th>#</th><th>Driver</th><th class=n>Pts</th><th class=n>Starts</th><th class=n>Wins</th><th class=n>T5</th><th class=n>T10</th><th class=n>Poles</th><th class=n>Led</th><th class=n>DNF</th><th class=n>Avg fin</th></tr></thead><tbody>${body}</tbody></table>`:'<div class="empty">No rookies have raced yet. Tick the Rookie box next to a driver on the Roster tab.</div>'}</div>`;
 }
+
+const teamStdOpt=d=>{const s=d.settings||{};return {n:Math.max(0,Math.min(12,parseInt(s.teamCars)||0)),avg:s.teamMode==="avg",season:s.teamPick==="season"}};
+function teamStdRows(d){
+  const o=teamStdOpt(d),dm=new Map(d.drivers.map(x=>[x.id,x])),tk=x=>(x.team||"").trim(),T=new Map();
+  const get=x=>{const k=tk(x).toLowerCase();let t=T.get(k);if(!t){t={key:k,name:tk(x),pts:0,carPts:0,starts:0,wins:0,t5:0,t10:0,poles:0,led:0,dnf:0,sf:0,cars:new Set(),drivers:new Set()};T.set(k,t)}return t};
+  let allowed=null;
+  if(o.season&&o.n){const di=agg([d],(dd,x)=>x.id,true),by=new Map();d.drivers.forEach(x=>{if(!tk(x))return;const z=di.get(x.id);if(!z||!z.starts)return;const k=tk(x).toLowerCase();(by.get(k)||by.set(k,[]).get(k)).push({id:x.id,p:z.pts})});
+    allowed=new Set();by.forEach(a=>{a.sort((p,q)=>q.p-p.p);a.slice(0,o.n).forEach(z=>allowed.add(z.id))})}
+  d.races.forEach((r,i)=>{if(!r.done)return;const pm=racePoints(d,r,i),by=new Map();
+    (r.res||[]).forEach(z=>{const x=dm.get(z.d);if(!x||!tk(x)||(allowed&&!allowed.has(x.id)))return;const k=tk(x).toLowerCase();(by.get(k)||by.set(k,[]).get(k)).push({x,z,p:pm.get(z.d)||0})});
+    by.forEach(arr=>{arr.sort((a,b)=>b.p-a.p||a.z.f-b.z.f);const use=o.n?arr.slice(0,o.n):arr,t=get(use[0].x),sum=use.reduce((a,c)=>a+c.p,0);
+      t.pts+=o.avg?sum/use.length:sum;t.carPts+=sum;
+      use.forEach(({x,z})=>{t.starts++;t.sf+=z.f;if(z.f===1)t.wins++;if(z.f<=5)t.t5++;if(z.f<=10)t.t10++;if(z.s===1)t.poles++;t.led+=z.l||0;if(z.x&&z.x!=="Running")t.dnf++;t.cars.add(String(x.num==null?"":x.num).trim());t.drivers.add(x.name.trim())})})});
+  const rows=[...T.values()];rows.forEach(t=>{t.avgF=t.starts?t.sf/t.starts:null;t.perCar=t.starts?t.carPts/t.starts:null;t.pts=Math.round(t.pts*100)/100});
+  rows.sort((a,b)=>b.pts-a.pts||b.wins-a.wins||b.t5-a.t5||b.t10-a.t10||a.name.localeCompare(b.name));rows.forEach((t,i)=>t.rank=i+1);return rows;
+}
+function vTeamStd(d){
+  const o=teamStdOpt(d),rows=teamStdRows(d),lead=rows.length?rows[0].pts:0,ps=v=>fmt(v,o.avg?1:0);
+  const body=rows.map((t,i)=>{const nxt=i?rows[i-1].pts-t.pts:0;
+    return `<tr><td class="rank">${t.rank}</td><td class="name">${teamFlag(t.name)}<b>${teamLink({team:t.name})}</b><div class="small muted">${[...t.drivers].map(esc).join(", ")}</div></td><td class="n"><b>${ps(t.pts)}</b></td><td class="n">${i?(lead-t.pts>0.004?"-"+ps(lead-t.pts):"0"):"–"}</td><td class="n">${i?(nxt>0.004?"-"+ps(nxt):"0"):"–"}</td><td class="n">${t.cars.size}</td><td class="n">${t.starts}</td><td class="n">${t.wins}</td><td class="n">${t.t5}</td><td class="n">${t.t10}</td><td class="n">${t.poles}</td><td class="n">${t.led}</td><td class="n">${t.dnf}</td><td class="n">${t.avgF!=null?fmt(t.avgF):"–"}</td><td class="n">${t.perCar!=null?fmt(t.perCar,1):"–"}</td></tr>`}).join("");
+  const nTxt=o.n?`the ${o.season?"top "+o.n+" cars on the team by season points":"best "+o.n+" car"+(o.n===1?"":"s")+" each race"}`:"every car on the team";
+  return `<div class="row"><h2>${esc(d.name)} Team Standings</h2><span class="sp"></span>${stBySeg()}${rows.length?'<button class="btn sm" data-act="gfxStd">Create graphic</button>':""}</div>${emptyHint(d)}
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <label class="fld">Cars that count<select data-ed="tstd" data-k="teamCars"><option value="0" ${!o.n?"selected":""}>All cars</option>${[1,2,3,4,5,6,7,8].map(n=>`<option value="${n}" ${o.n===n?"selected":""}>${n} car${n===1?"":"s"}</option>`).join("")}</select></label>
+      <label class="fld">Which cars<select data-ed="tstd" data-k="teamPick"><option value="race" ${!o.season?"selected":""}>Best finishers each race</option><option value="season" ${o.season?"selected":""}>Top cars by season points</option></select></label>
+      <label class="fld">Scoring<select data-ed="tstd" data-k="teamMode"><option value="total" ${!o.avg?"selected":""}>Total points</option><option value="avg" ${o.avg?"selected":""}>Average points per car</option></select></label></div>
+    <div class="small muted">${o.avg?"Each race a team scores the average points of":"Each race a team scores the combined points of"} ${nTxt}${o.n&&!o.season?"":""}. Team points add up over the season with no postseason reset. Stats count only the cars that score.</div>
+    <div class="card tw">${rows.length?`<table data-frz="2" data-frzn="1"><thead><tr><th class=n>Pos</th><th>Team</th><th class=n>Pts</th><th class=n>Lead</th><th class=n>Next</th><th class=n>Cars</th><th class=n title="Car starts that count">Starts</th><th class=n>Wins</th><th class=n>T5</th><th class=n>T10</th><th class=n>Poles</th><th class=n>Led</th><th class=n>DNF</th><th class=n>Avg fin</th><th class=n title="Average points per counted car per race">Pts/car</th></tr></thead><tbody>${body}</tbody></table>`:'<div class="empty">Team standings appear after you enter results. Drivers need a team on the Roster tab.</div>'}</div>`;
+}
 function vStandings(d){
   const hasPost=!!(d.settings.chase.on||PO(d).on);
   if(ui.stBy==="owners")return vOwners(d,hasPost);
   if(ui.stBy==="rookies")return vRookies(d);
+  if(ui.stBy==="teams")return vTeamStd(d);
   const mode=hasPost?(ui.stFilter||"post"):"full";
   const {rows,chase}=standings(d,mode);
   const lead=rows.length?rows[0].show:0;
@@ -761,7 +798,7 @@ function vStandings(d){
     const nxt=i?rows[i-1].show-s.show:0,sameGroup=i&&rows[i-1].chase===s.chase;
     if(chase&&i&&rows[i-1].chase&&!s.chase)html+=`<tr class="div"><td colspan="17">Outside the Chase · season points</td></tr>`;
     html+=`<tr><td class="rank">${s.rank}</td><td><span class="car">${esc(s.num)}</span></td>
-      <td class="name"><a href="#" data-act="drv" data-id="${s.id}">${esc(s.name)}</a>${s.rookie?' <span class="pill rk">R</span>':""}<div class="small muted">${teamLine(s)}</div></td>${qs?`<td><span class="pill ${stT[qs.m.get(s.id)||"out"][0]}">${stT[qs.m.get(s.id)||"out"][1]}</span></td>`:""}
+      <td class="name">${flagOf(s.nat)?`<a href="#" class="fl" data-act="country" data-n="${esc(natNorm(s.nat))}">${flagHtml(s.nat)}</a> `:""}<a href="#" data-act="drv" data-id="${s.id}">${esc(s.name)}</a>${s.rookie?' <span class="pill rk">R</span>':""}<div class="small muted">${teamLine(s)}</div></td>${qs?`<td><span class="pill ${stT[qs.m.get(s.id)||"out"][0]}">${stT[qs.m.get(s.id)||"out"][1]}</span></td>`:""}
       <td class="n"><b>${s.show}</b></td><td class="n">${i?(sameGroup?"-"+(lead-s.show):"–"):"–"}</td><td class="n">${i&&sameGroup?(nxt?"-"+nxt:"0"):"–"}</td>
       <td class="n">${s.starts}</td><td class="n">${s.wins}</td><td class="n">${s.t5}</td><td class="n">${s.t10}</td><td class="n">${s.poles}</td><td class="n">${s.led}</td><td class="n">${s.dnf}</td>${stg(d).on?`<td class="n">${s.stw}</td><td class="n">${s.stp}</td><td class="n">${s.pp}</td>`:""}<td class="n">${s.avgF!=null?fmt(s.avgF):"–"}</td></tr>`;
   });
@@ -875,7 +912,7 @@ function vTeams(d){
   const cards=teams.map(t=>{
     const rd=meanOf(t.drivers.map(z=>avgRate(z.dr,"d"))),rp=meanOf(t.drivers.map(z=>avgRate(z.dr,"p"))),rv=meanOf(t.drivers.map(z=>avgRate(z.dr,"v")));
     const top=t.drivers[0],multi=t.series.size>1;
-    return `<button class="card tcard" data-act="team" data-t="${esc(t.name)}"><h3>${esc(t.name)}</h3>
+    return `<button class="card tcard" data-act="team" data-t="${esc(t.name)}"><h3>${(()=>{const n=teamNat(t.name);return n&&flagOf(n)?flagHtml(n)+" ":""})()}${esc(t.name)}</h3>
       <div class="row">${[...t.series].map(n=>`<span class="pill">${esc(n)}</span>`).join("")}${[...t.makes].map(m=>`<span class="pill">${esc(m)}</span>`).join("")}<span class="small muted">${t.drivers.length} car${t.drivers.length===1?"":"s"}</span></div>
       <div class="tst"><div><b>${t.wins}</b><small>Wins</small></div><div><b>${t.poles}</b><small>Poles</small></div><div><b>${t.t5}</b><small>Top 5</small></div><div><b>${t.led}</b><small>Laps led</small></div></div>
       ${top&&top.s.starts?`<div class="small"><span class="muted">Best driver</span> <b>${esc(top.dr.name)}</b> <span class="muted">· ${multi?esc(top.dd.name)+" ":""}P${top.rank||"–"} · ${top.s.pts} pts</span></div>`:""}
@@ -933,11 +970,11 @@ function modalTeam(){
     return `<tr><td>${dd.year}</td>${multiH?`<td>${esc(dd.name)}</td>`:""}<td class="n">${dl.length}</td><td class="n">${t.starts}</td><td class="n">${t.wins}</td><td class="n">${t.poles}</td><td class="n">${t.t5}</td><td class="n">${t.t10}</td><td class="n">${t.led}</td></tr>`}).join("");
   const serOpts=[...new Map(allDocs.map(dd=>[dd.series,dd.name])).entries()];
   const scope=(yf==="all"?"All seasons":yf)+(sf==="all"?"":" · "+(serOpts.find(z=>z[0]===sf)||[])[1]);
-  return `<div class="dlg" role="dialog" aria-label="Team profile" data-s="${ui.series}"><header><h3 style="font-size:26px">${esc(name)}</h3>${serNames.map(x=>`<span class="pill">${esc(x)}</span>`).join("")}${makes.map(x=>`<span class="pill">${esc(x)}</span>`).join("")}<span class="muted">${esc(scope)}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  return `<div class="dlg" role="dialog" aria-label="Team profile" data-s="${ui.series}"><header><h3 style="font-size:26px;display:flex;align-items:center;gap:10px">${teamFlag(name)}${esc(name)}</h3>${serNames.map(x=>`<span class="pill">${esc(x)}</span>`).join("")}${makes.map(x=>`<span class="pill">${esc(x)}</span>`).join("")}<span class="muted">${esc(scope)}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body" style="display:flex;flex-direction:column;gap:16px">
     <div class="row" style="gap:12px"><label class="fld">Series<select data-tf="sf"><option value="all">All series</option>${serOpts.map(([k,n])=>`<option value="${k}" ${sf===k?"selected":""}>${esc(n)}</option>`).join("")}</select></label>
       <label class="fld">Season<select data-tf="yf"><option value="all" ${yf==="all"?"selected":""}>All seasons</option>${yrs.map(y=>`<option value="${y}" ${yf===y?"selected":""}>${y}</option>`).join("")}</select></label><span class="sp"></span>${logSeg()}</div>
-    <div class="fields"><label class="fld">Owner<input type="text" data-tm="owner" value="${esc(prof.owner||"")}" style="width:190px"></label><label class="fld">Base<input type="text" data-tm="base" value="${esc(prof.base||"")}" style="width:190px"></label><label class="fld">Founded<input type="text" data-tm="founded" value="${esc(prof.founded||"")}" style="width:90px"></label></div>
+    <div class="fields"><label class="fld">Owner<input type="text" data-tm="owner" value="${esc(prof.owner||"")}" style="width:190px"></label><label class="fld">Base<input type="text" data-tm="base" value="${esc(prof.base||"")}" style="width:190px"></label><label class="fld">Founded<input type="text" data-tm="founded" value="${esc(prof.founded||"")}" style="width:90px"></label><label class="fld">Nationality<input type="text" list="natListT" data-tm="nat" value="${esc(teamNat(name))}" placeholder="Country" style="width:170px"><datalist id="natListT">${Object.keys(NATS).map(n=>`<option value="${esc(n)}">`).join("")}</datalist></label></div>
     <label class="fld" style="width:100%">Notes<textarea data-tm="notes" rows="2" style="text-transform:none;letter-spacing:0">${esc(prof.notes||"")}</textarea></label>
     <div class="tiles"><div><b>${tot.starts}</b><small>Starts</small></div><div><b>${tot.wins}</b><small>Wins</small></div><div><b>${crownRaces(sel).filter(z=>z.dv&&teamKey(z.dv)===key).length}</b><small>Crown jewels</small></div><div><b>${tot.poles}</b><small>Poles</small></div><div><b>${tot.t5}</b><small>Top 5</small></div><div><b>${tot.t10}</b><small>Top 10</small></div><div><b>${tot.led}</b><small>Laps led</small></div><div><b>${tot.dnf}</b><small>DNF</small></div><div><b>${tot.starts?fmt(tot.sf/tot.starts):"–"}</b><small>Avg finish</small></div></div>
     <div class="tiles">${[["Driver avg",av[0]],["Pit crew avg",av[1]],["Vehicle avg",av[2]]].map(([n,v])=>`<div style="background:${heat(v)}"><b>${v==null?"–":f1(v)}</b><small>${n}</small></div>`).join("")}</div>
@@ -1144,18 +1181,152 @@ function vExhib(d){
     <div class="card tw">${st.length?`<table><thead><tr><th>Driver</th><th class="n">Starts</th><th class="n">Wins</th>${kc.map(k=>`<th class="n">${k} wins</th>`).join("")}<th class="n">Top 5</th><th class="n">Poles</th><th class="n">Laps led</th><th class="n">Avg fin</th><th class="n">Best</th></tr></thead><tbody>${st.map(s=>`<tr><td class="name"><span class="car">${esc(s.num)}</span> ${esc(s.name)}</td><td class="n">${s.starts}</td><td class="n"><b>${s.wins}</b></td>${kc.map(k=>`<td class="n">${s.k[k]||0}</td>`).join("")}<td class="n">${s.t5}</td><td class="n">${s.poles}</td><td class="n">${s.led}</td><td class="n">${fmt(s.sf/s.starts)}</td><td class="n">${s.best}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Leaders appear after you enter exhibition results.</div>'}</div>`;
 }
 
-async function wdLookup(name){
-  const base="https://www.wikidata.org/w/api.php?format=json&origin=*",j=async u=>{const r=await fetch(u);if(!r.ok)throw new Error("http");return r.json()};
-  const sr=await j(base+"&action=wbsearchentities&language=en&type=item&limit=7&search="+encodeURIComponent(name));
-  const ids=(sr.search||[]).map(x=>x.id);if(!ids.length)return null;
-  const g=await j(base+"&action=wbgetentities&props=claims|descriptions|labels&languages=en&ids="+ids.join("|"));
-  for(const id of ids){const e=(g.entities||{})[id];if(!e)continue;
-    const desc=(e.descriptions&&e.descriptions.en&&e.descriptions.en.value)||"";
-    const c=e.claims&&e.claims.P569&&e.claims.P569[0],bd=c&&c.mainsnak&&c.mainsnak.datavalue&&c.mainsnak.datavalue.value;
-    if(!bd||!/driver|racer|racing|nascar|motorsport/i.test(desc))continue;
-    const m=String(bd.time).match(/^\+?(\d{4})-(\d\d)-(\d\d)/);if(!m)continue;
-    return {label:(e.labels&&e.labels.en&&e.labels.en.value)||name,desc,y:+m[1],mo:+m[2]||6,da:+m[3]||15};}
-  return null;
+const NATS={"Afghanistan":"AF","Albania":"AL","Algeria":"DZ","Andorra":"AD","Angola":"AO","Antigua and Barbuda":"AG","Argentina":"AR","Armenia":"AM","Aruba":"AW","Australia":"AU","Austria":"AT","Azerbaijan":"AZ","Bahamas":"BS","Bahrain":"BH","Bangladesh":"BD","Barbados":"BB","Belarus":"BY","Belgium":"BE","Belize":"BZ","Benin":"BJ","Bermuda":"BM","Bhutan":"BT","Bolivia":"BO","Bosnia and Herzegovina":"BA","Botswana":"BW","Brazil":"BR","Brunei":"BN","Bulgaria":"BG","Burkina Faso":"BF","Burundi":"BI","Cambodia":"KH","Cameroon":"CM","Canada":"CA","Cape Verde":"CV","Cayman Islands":"KY","Central African Republic":"CF","Chad":"TD","Chile":"CL","China":"CN","Colombia":"CO","Comoros":"KM","Costa Rica":"CR","Croatia":"HR","Cuba":"CU","Curaçao":"CW","Cyprus":"CY","Czech Republic":"CZ","Democratic Republic of the Congo":"CD","Denmark":"DK","Djibouti":"DJ","Dominica":"DM","Dominican Republic":"DO","Ecuador":"EC","Egypt":"EG","El Salvador":"SV","England":"GB-ENG","Equatorial Guinea":"GQ","Eritrea":"ER","Estonia":"EE","Eswatini":"SZ","Ethiopia":"ET","Fiji":"FJ","Finland":"FI","France":"FR","Gabon":"GA","Gambia":"GM","Georgia":"GE","Germany":"DE","Ghana":"GH","Greece":"GR","Grenada":"GD","Guatemala":"GT","Guinea":"GN","Guyana":"GY","Haiti":"HT","Honduras":"HN","Hong Kong":"HK","Hungary":"HU","Iceland":"IS","India":"IN","Indonesia":"ID","Iran":"IR","Iraq":"IQ","Ireland":"IE","Isle of Man":"IM","Israel":"IL","Italy":"IT","Ivory Coast":"CI","Jamaica":"JM","Japan":"JP","Jersey":"JE","Jordan":"JO","Kazakhstan":"KZ","Kenya":"KE","Kuwait":"KW","Kyrgyzstan":"KG","Laos":"LA","Latvia":"LV","Lebanon":"LB","Lesotho":"LS","Liberia":"LR","Libya":"LY","Liechtenstein":"LI","Lithuania":"LT","Luxembourg":"LU","Macau":"MO","Madagascar":"MG","Malawi":"MW","Malaysia":"MY","Maldives":"MV","Mali":"ML","Malta":"MT","Mauritania":"MR","Mauritius":"MU","Mexico":"MX","Moldova":"MD","Monaco":"MC","Mongolia":"MN","Montenegro":"ME","Morocco":"MA","Mozambique":"MZ","Myanmar":"MM","Namibia":"NA","Nepal":"NP","Netherlands":"NL","New Zealand":"NZ","Nicaragua":"NI","Niger":"NE","Nigeria":"NG","North Korea":"KP","North Macedonia":"MK","Northern Ireland":"GB-NIR","Norway":"NO","Oman":"OM","Pakistan":"PK","Palestine":"PS","Panama":"PA","Papua New Guinea":"PG","Paraguay":"PY","Peru":"PE","Philippines":"PH","Poland":"PL","Portugal":"PT","Puerto Rico":"PR","Qatar":"QA","Republic of the Congo":"CG","Romania":"RO","Russia":"RU","Rwanda":"RW","Saint Lucia":"LC","San Marino":"SM","Saudi Arabia":"SA","Scotland":"GB-SCT","Senegal":"SN","Serbia":"RS","Seychelles":"SC","Sierra Leone":"SL","Singapore":"SG","Slovakia":"SK","Slovenia":"SI","Somalia":"SO","South Africa":"ZA","South Korea":"KR","South Sudan":"SS","Spain":"ES","Sri Lanka":"LK","Sudan":"SD","Suriname":"SR","Sweden":"SE","Switzerland":"CH","Syria":"SY","Taiwan":"TW","Tajikistan":"TJ","Tanzania":"TZ","Thailand":"TH","Togo":"TG","Trinidad and Tobago":"TT","Tunisia":"TN","Turkey":"TR","Turkmenistan":"TM","Uganda":"UG","Ukraine":"UA","United Arab Emirates":"AE","United Kingdom":"GB","United States":"US","Uruguay":"UY","Uzbekistan":"UZ","Venezuela":"VE","Vietnam":"VN","Wales":"GB-WLS","Zambia":"ZM","Zimbabwe":"ZW"};
+const natNorm=x=>{x=String(x||"").trim();const al={"United States of America":"United States","USA":"United States","US":"United States","American":"United States","British":"United Kingdom","UK":"United Kingdom","Great Britain":"United Kingdom","Czechia":"Czech Republic","Republic of Ireland":"Ireland","UAE":"United Arab Emirates","Kingdom of the Netherlands":"Netherlands","Russian Federation":"Russia","Korea":"South Korea","Republic of Korea":"South Korea","Czech Republic (Czechia)":"Czech Republic","Türkiye":"Turkey","Burma":"Myanmar","Swaziland":"Eswatini","Macedonia":"North Macedonia","Côte d'Ivoire":"Ivory Coast","Cabo Verde":"Cape Verde","Congo":"Republic of the Congo","DR Congo":"Democratic Republic of the Congo","Hong Kong SAR":"Hong Kong","Vatican City":"Vatican City","Kingdom of Denmark":"Denmark","West Germany":"Germany","East Germany":"Germany","Soviet Union":"Russia","Czechoslovakia":"Czech Republic","Yugoslavia":"Serbia","Federal Republic of Yugoslavia":"Serbia","Serbia and Montenegro":"Serbia","Kingdom of Italy":"Italy","Kingdom of Great Britain":"United Kingdom","United Kingdom of Great Britain and Ireland":"United Kingdom","Republic of China":"Taiwan","People's Republic of China":"China","Rhodesia":"Zimbabwe","Zaire":"Democratic Republic of the Congo","Kingdom of Spain":"Spain","Federal Republic of Germany":"Germany","Czech Republic":"Czech Republic","Republic of Türkiye":"Turkey"};if(al[x])return al[x];if(!NATS[x]){const y=x.replace(/^(Kingdom|Republic|State|Commonwealth|Federation) of (the )?/i,"");if(NATS[y])return y}return x};
+const flagOf=x=>{const c=NATS[natNorm(x)];return c?c.toLowerCase():""};
+const flagHtml=x=>{const c=flagOf(x);return c?`<img class="flag" src="https://flagcdn.com/w80/${c}.png" srcset="https://flagcdn.com/w160/${c}.png 2x" width="24" height="18" alt="${esc(natNorm(x))}" title="${esc(natNorm(x))}" onerror="this.style.display='none'">`:""};
+const natHtml=x=>x?(flagHtml(x)?flagHtml(x)+" ":"")+esc(natNorm(x)):"";
+const teamNat=name=>{const k=String(name||"").trim().toLowerCase(),c=cur();let r="";const look=dd=>{if(r||!dd||!dd.teams)return;for(const n in dd.teams){if(n.trim().toLowerCase()===k&&dd.teams[n]&&dd.teams[n].nat){r=natNorm(dd.teams[n].nat);return}}};look(c);Object.values(docs).forEach(look);return r};
+const teamFlag=name=>{const n=teamNat(name);return n&&flagOf(n)?`<a href="#" class="fl" data-act="country" data-n="${esc(n)}">${flagHtml(n)}</a> `:""};
+const natLink=x=>x?`<a href="#" class="tl" data-act="country" data-n="${esc(natNorm(x))}">${natHtml(x)}</a>`:"";
+function ctyData(docsL){
+  const m=agg(docsL,(dd,x)=>x.name.trim().toLowerCase()),g=new Map(),F=["starts","wins","poles","t5","t10","led","dnf","sf"];
+  const get=n=>{let o=g.get(n);if(!o){o={name:n,list:[],titles:0,crowns:0,champs:[],allDrivers:0};F.forEach(f=>o[f]=0);g.set(n,o)}return o};
+  m.forEach(x=>{const n=natNorm(x.nat);if(!n)return;const o=get(n);o.allDrivers++;if(x.starts>0){o.list.push(x);F.forEach(f=>o[f]+=x[f]||0)}});
+  docsL.forEach(dd=>{const c=champOf(dd);if(c&&!c.live&&c.note){const dv=dd.drivers.find(q=>q.name.trim().toLowerCase()===String(c.name).trim().toLowerCase()),n=dv&&natNorm(dv.nat);if(n){const o=get(n);o.titles++;o.champs.push({dd,name:c.name,note:c.note})}}});
+  crownRaces(docsL).forEach(z=>{const n=z.dv&&natNorm(z.dv.nat);if(n)get(n).crowns++});
+  g.forEach(o=>{o.list.sort((a,b)=>b.wins-a.wins||b.t5-a.t5||b.starts-a.starts);o.racers=o.list.length;o.avgF=o.starts?o.sf/o.starts:null});
+  return g;
+}
+const ctyDocs=()=>{const sr=ui.cSer||"all";return (ui.cScope==="season"?SERIES.map(([k])=>docs[docId(k,ui.year)]).filter(Boolean):Object.values(docs).filter(Boolean)).filter(dd=>dd.drivers&&(sr==="all"||dd.series===sr))};
+function vCountries(d){
+  const dl=ctyDocs(),g=ctyData(dl),sk=ui.cSort||"wins";
+  const unk=new Set();dl.forEach(dd=>dd.drivers.forEach(x=>{if(!natNorm(x.nat))unk.add(x.name.trim().toLowerCase())}));
+  const arr=[...g.values()].sort((a,b)=>(sk==="name"?a.name.localeCompare(b.name):((b[sk]||0)-(a[sk]||0)||b.wins-a.wins||b.starts-a.starts||a.name.localeCompare(b.name))));
+  const SK=[["wins","Wins"],["starts","Starts"],["allDrivers","Drivers"],["poles","Poles"],["t5","Top 5s"],["titles","Titles"],["name","Name"]];
+  const cards=arr.map(o=>{const b=o.list[0];return `<button class="card tcard" data-act="country" data-n="${esc(o.name)}"><h3>${flagHtml(o.name)} ${esc(o.name)}</h3>
+    <div class="row"><span class="small muted">${o.allDrivers} driver${o.allDrivers===1?"":"s"} on roster${o.racers!==o.allDrivers?" · "+o.racers+" with starts":""}</span></div>
+    <div class="tst"><div><b>${o.wins}</b><small>Wins</small></div><div><b>${o.titles}</b><small>Titles</small></div><div><b>${o.poles}</b><small>Poles</small></div><div><b>${o.t5}</b><small>Top 5</small></div></div>
+    ${b?`<div class="small"><span class="muted">Best driver</span> <b>${esc(b.name)}</b> <span class="muted">· ${b.wins} win${b.wins===1?"":"s"}, ${b.starts} starts</span></div>`:""}</button>`}).join("");
+  return `<div class="row"><h2>Nationalities · ${arr.length}</h2><span class="sp"></span>
+    <label class="fld">Series<select data-ct="cSer"><option value="all">All series</option>${SERIES.map(([k,n])=>`<option value="${k}" ${ui.cSer===k?"selected":""}>${esc(n)}</option>`).join("")}</select></label>
+    <label class="fld">Stats<select data-ct="cScope"><option value="career" ${ui.cScope!=="season"?"selected":""}>All seasons</option><option value="season" ${ui.cScope==="season"?"selected":""}>${ui.year} season</option></select></label>
+    <label class="fld">Sort by<select data-ct="cSort">${SK.map(([v,n])=>`<option value="${v}" ${sk===v?"selected":""}>${n}</option>`).join("")}</select></label></div>
+    ${arr.length?`<div class="grid3">${cards}</div>`:'<div class="card empty">Nationalities come from each driver\'s nationality. Set it in a driver profile, or use “Look up nationalities” on the Drivers tab.</div>'}
+    ${unk.size?`<p class="small muted">${unk.size} driver${unk.size===1?" has":"s have"} no nationality yet, so they are not listed here.</p>`:""}
+    <p class="small muted">Open a nationality to see its stats, best drivers, champions and seasons.</p>`;
+}
+function modalCountry(){
+  const m=ui.modal,n=m.n,ord=k=>SERIES.findIndex(z=>z[0]===k);
+  const allDocs=Object.values(docs).filter(dd=>dd&&dd.drivers&&dd.drivers.some(x=>natNorm(x.nat)===n)).sort((a,b)=>a.year-b.year||ord(a.series)-ord(b.series));
+  const sf=m.sf&&allDocs.some(dd=>dd.series===m.sf)?m.sf:"all",sDocs=allDocs.filter(dd=>sf==="all"||dd.series===sf);
+  const yrs=[...new Set(sDocs.map(dd=>dd.year))].sort((a,b)=>b-a);
+  let yf=m.yf===undefined?"all":m.yf;if(yf!=="all"&&!yrs.includes(+yf))yf="all";
+  const sel=sDocs.filter(dd=>yf==="all"||dd.year===+yf),multiS=new Set(allDocs.map(dd=>dd.series)).size>1;
+  const allSel=Object.values(docs).filter(dd=>dd&&dd.drivers&&(sf==="all"||dd.series===sf)&&(yf==="all"||dd.year===+yf));
+  const o=ctyData(allSel).get(n)||{list:[],starts:0,wins:0,poles:0,t5:0,t10:0,led:0,dnf:0,sf:0,titles:0,crowns:0,champs:[],allDrivers:0,racers:0,avgF:null};
+  const totW=allSel.reduce((a,dd)=>a+dd.races.filter(r=>r.done&&(r.res||[]).some(z=>z.f===1)).length,0);
+  const roster=new Set();sel.forEach(dd=>dd.drivers.forEach(x=>{if(natNorm(x.nat)===n)roster.add(x.name.trim())}));
+  const find=name=>{const k=name.trim().toLowerCase();for(const dd of [...allDocs].reverse()){const x=dd.drivers.find(q=>q.name.trim().toLowerCase()===k);if(x)return {dd,x}}return null};
+  const titlesBy=new Map();o.champs.forEach(c=>{const k=String(c.name).trim().toLowerCase();titlesBy.set(k,(titlesBy.get(k)||0)+1)});
+  const best=o.list.slice(0,15);
+  const bestRows=best.map((x,i)=>{const f=find(x.name),lk=f?`<a href="#" data-act="drvAt" data-s="${f.dd.series}" data-y="${f.dd.year}" data-id="${f.x.id}">${esc(x.name)}</a>`:esc(x.name);
+    return `<tr><td class="n">${i+1}</td><td class="name">${lk}</td><td class="n">${x.starts}</td><td class="n"><b>${x.wins}</b></td><td class="n">${titlesBy.get(x.name.trim().toLowerCase())||0}</td><td class="n">${x.poles}</td><td class="n">${x.t5}</td><td class="n">${x.t10}</td><td class="n">${x.led}</td><td class="n">${x.starts?fmt(x.sf/x.starts):"–"}</td></tr>`}).join("");
+  const seasons=sel.slice().sort((a,b)=>b.year-a.year||ord(a.series)-ord(b.series)).map(dd=>{const q=ctyData([dd]).get(n);if(!q)return "";const b=q.list.slice().sort((a,c)=>a.best-c.best||c.wins-a.wins)[0],ch=q.champs[0];
+    return `<tr><td>${dd.year}</td>${multiS?`<td>${esc(dd.name)}</td>`:""}<td class="n">${q.racers}</td><td class="n">${q.starts}</td><td class="n"><b>${q.wins}</b></td><td class="n">${q.poles}</td><td class="n">${q.t5}</td><td>${b&&b.best<99?esc(b.name)+' <span class="muted small">P'+b.best+"</span>":"–"}</td><td>${ch?"<b>"+esc(ch.name)+"</b>":""}</td></tr>`}).join("");
+  const champRows=o.champs.slice().sort((a,b)=>b.dd.year-a.dd.year||ord(a.dd.series)-ord(b.dd.series)).map(c=>`<tr><td>${c.dd.year}</td>${multiS?`<td>${esc(c.dd.name)}</td>`:""}<td><b>${esc(c.name)}</b></td></tr>`).join("");
+  const serOpts=[...new Map(allDocs.map(dd=>[dd.series,dd.name])).entries()];
+  const scope=(yf==="all"?"All seasons":yf)+(sf==="all"?"":" · "+(serOpts.find(z=>z[0]===sf)||[])[1]);
+  return `<div class="dlg" role="dialog" aria-label="Country profile" data-s="${ui.series}"><header><h3 style="font-size:26px;display:flex;align-items:center;gap:10px">${flagHtml(n)} ${esc(n)}</h3><span class="muted">${esc(scope)}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body" style="display:flex;flex-direction:column;gap:16px">
+    <div class="row" style="gap:12px"><label class="fld">Series<select data-tf="sf"><option value="all">All series</option>${serOpts.map(([k,nm])=>`<option value="${k}" ${sf===k?"selected":""}>${esc(nm)}</option>`).join("")}</select></label>
+      <label class="fld">Season<select data-tf="yf"><option value="all" ${yf==="all"?"selected":""}>All seasons</option>${yrs.map(y=>`<option value="${y}" ${yf===y?"selected":""}>${y}</option>`).join("")}</select></label></div>
+    <div class="tiles"><div><b>${o.racers}</b><small>Drivers with starts</small></div><div><b>${o.starts}</b><small>Starts</small></div><div><b>${o.wins}</b><small>Wins</small></div><div><b>${totW?Math.round(o.wins/totW*1000)/10:0}%</b><small>Share of all wins</small></div><div><b>${o.titles}</b><small>Titles</small></div><div><b>${o.crowns}</b><small>Crown jewels</small></div><div><b>${o.poles}</b><small>Poles</small></div><div><b>${o.t5}</b><small>Top 5</small></div><div><b>${o.t10}</b><small>Top 10</small></div><div><b>${o.led}</b><small>Laps led</small></div><div><b>${o.avgF!=null?fmt(o.avgF):"–"}</b><small>Avg finish</small></div></div>
+    <div><h3>Best drivers</h3>${best.length?`<div class="tw"><table><thead><tr><th class="n">#</th><th>Driver</th><th class="n">Starts</th><th class="n">Wins</th><th class="n">Titles</th><th class="n">Poles</th><th class="n">Top 5</th><th class="n">Top 10</th><th class="n">Led</th><th class="n">Avg fin</th></tr></thead><tbody>${bestRows}</tbody></table></div>`:'<p class="muted">No race starts for this selection yet.</p>'}
+      <div class="small muted" style="margin-top:6px">Ranked by wins, then top 5s, then starts. ${roster.size} driver${roster.size===1?"":"s"} on rosters: ${[...roster].sort().map(esc).join(", ")}</div></div>
+    ${(()=>{const tn=new Map();Object.values(docs).forEach(dd=>{if(dd&&dd.teams)for(const nm in dd.teams){if(dd.teams[nm]&&natNorm(dd.teams[nm].nat)===n)tn.set(nm.trim().toLowerCase(),nm.trim())}});if(!tn.size)return "";const tm=agg(allSel,(dd,x)=>teamKey(x),true),rows=[...tn].map(([k,nm])=>({nm,s:tm.get(k)||{starts:0,wins:0,poles:0,t5:0}})).sort((a,b)=>b.s.wins-a.s.wins||b.s.starts-a.s.starts||a.nm.localeCompare(b.nm));
+      return `<div><h3>Teams</h3><div class="tw"><table><thead><tr><th>Team</th><th class="n">Starts</th><th class="n">Wins</th><th class="n">Poles</th><th class="n">Top 5</th></tr></thead><tbody>${rows.map(r=>`<tr><td class="name"><a href="#" class="tl" data-act="team" data-t="${esc(r.nm)}">${esc(r.nm)}</a></td><td class="n">${r.s.starts}</td><td class="n"><b>${r.s.wins}</b></td><td class="n">${r.s.poles}</td><td class="n">${r.s.t5}</td></tr>`).join("")}</tbody></table></div></div>`})()}
+    ${champRows?`<div><h3>Champions</h3><div class="tw"><table><thead><tr><th>Year</th>${multiS?"<th>Series</th>":""}<th>Driver</th></tr></thead><tbody>${champRows}</tbody></table></div></div>`:""}
+    <div><h3>By season</h3><div class="tw"><table><thead><tr><th>Year</th>${multiS?"<th>Series</th>":""}<th class="n">Drivers</th><th class="n">Starts</th><th class="n">Wins</th><th class="n">Poles</th><th class="n">Top 5</th><th>Best result</th><th>Champion</th></tr></thead><tbody>${seasons}</tbody></table></div></div>
+  </div></div>`;
+}
+
+const wdCache=new Map();
+const wdFold=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+const DEMO={"American":"United States","British":"United Kingdom","English":"England","Scottish":"Scotland","Welsh":"Wales","Northern Irish":"Northern Ireland","Irish":"Ireland","Canadian":"Canada","Mexican":"Mexico","Brazilian":"Brazil","Argentine":"Argentina","Argentinian":"Argentina","Colombian":"Colombia","Chilean":"Chile","Uruguayan":"Uruguay","Venezuelan":"Venezuela","Peruvian":"Peru","Ecuadorian":"Ecuador","Australian":"Australia","New Zealand":"New Zealand","French":"France","German":"Germany","Italian":"Italy","Spanish":"Spain","Portuguese":"Portugal","Dutch":"Netherlands","Belgian":"Belgium","Swiss":"Switzerland","Austrian":"Austria","Swedish":"Sweden","Norwegian":"Norway","Danish":"Denmark","Finnish":"Finland","Icelandic":"Iceland","Polish":"Poland","Czech":"Czech Republic","Slovak":"Slovakia","Hungarian":"Hungary","Romanian":"Romania","Bulgarian":"Bulgaria","Greek":"Greece","Turkish":"Turkey","Russian":"Russia","Ukrainian":"Ukraine","Estonian":"Estonia","Latvian":"Latvia","Lithuanian":"Lithuania","Croatian":"Croatia","Serbian":"Serbia","Slovenian":"Slovenia","Japanese":"Japan","Chinese":"China","Korean":"South Korea","South Korean":"South Korea","Indian":"India","Thai":"Thailand","Malaysian":"Malaysia","Indonesian":"Indonesia","Singaporean":"Singapore","Filipino":"Philippines","Taiwanese":"Taiwan","South African":"South Africa","Monegasque":"Monaco","Emirati":"United Arab Emirates","Saudi":"Saudi Arabia","Israeli":"Israel","Lebanese":"Lebanon","Moroccan":"Morocco","Egyptian":"Egypt","Kenyan":"Kenya","Nigerian":"Nigeria","Puerto Rican":"Puerto Rico","Jamaican":"Jamaica","Cuban":"Cuba","Dominican":"Dominican Republic","Costa Rican":"Costa Rica","Guatemalan":"Guatemala","Panamanian":"Panama","Paraguayan":"Paraguay","Bolivian":"Bolivia","Trinidadian":"Trinidad and Tobago","Bahraini":"Bahrain","Qatari":"Qatar","Luxembourgish":"Luxembourg","Liechtensteiner":"Liechtenstein","Belarusian":"Belarus","Kazakh":"Kazakhstan","Azerbaijani":"Azerbaijan","Georgian":"Georgia","Armenian":"Armenia"};
+const DEMO_RE=Object.keys(DEMO).sort((a,b)=>b.length-a.length).map(k=>[new RegExp("\\b"+k+"\\b","i"),DEMO[k]]);
+const wdWait=ms=>new Promise(z=>setTimeout(z,ms));
+async function wdJ(u){for(let a=0;;a++){let r;try{r=await fetch(u)}catch(e){if(a>=3)throw e;await wdWait(600*2**a);continue}
+  if(r.ok)return r.json();if((r.status===429||r.status>=500)&&a<3){await wdWait(800*2**a);continue}throw new Error("http")}}
+const WDB="https://www.wikidata.org/w/api.php?format=json&origin=*";
+async function wdFind(name){
+  const cl=String(name).replace(/\[[^\]]*\]|\([^)]*\)|"[^"]*"|“[^”]*”|[†‡*#§^]|\s\/\s.*$|\s+R$/g," ").replace(/\s+/g," ").trim();
+  const ns=cl.replace(/[,.]?\s+(Jr|Sr|II|III|IV)\.?$/i,"").trim();
+  const f1=wdFold(cl),f2=wdFold(ns);
+  const evalIds=async (ids,trusted)=>{
+    const list=[...ids].slice(0,40);if(!list.length)return null;
+    const g=await wdJ(WDB+"&action=wbgetentities&props=claims|descriptions|labels|aliases&languages=en&ids="+list.join("|"));
+    let best=null,bs=-1;
+    for(const id of list){const e=(g.entities||{})[id];if(!e||!e.claims)continue;
+      const desc=(e.descriptions&&e.descriptions.en&&e.descriptions.en.value)||"",lab=(e.labels&&e.labels.en&&e.labels.en.value)||"";
+      const c=e.claims.P569&&e.claims.P569[0],bd=c&&c.mainsnak&&c.mainsnak.datavalue&&c.mainsnak.datavalue.value;
+      if(!bd)continue;const m=String(bd.time).match(/^[+]?(\d{4})-(\d\d)-(\d\d)/);if(!m||+m[1]<1850)continue;
+      const occ=(e.claims.P106||[]).map(x=>x.mainsnak&&x.mainsnak.datavalue&&x.mainsnak.datavalue.value&&x.mainsnak.datavalue.value.id);
+      const motor=/driver|racer|racing|motorsport|nascar|indy|formula|rally|kart|stock car|speedway|sports car|endurance|motorcycle|drag/i.test(desc)||occ.includes("Q378622")||(e.claims.P2416||[]).length>0&&/racing|motor/i.test(JSON.stringify(e.claims.P2416));
+      if(!motor)continue;
+      const fl=wdFold(lab),al=((e.aliases&&e.aliases.en)||[]).map(a=>wdFold(a.value));
+      let nm=0;if(fl===f1)nm=4;else if(fl===f2)nm=3;else if(al.includes(f1))nm=3;else if(al.includes(f2))nm=2;
+      else{const pa=f2.split(" "),pb=fl.split(" ");if(pa.length>1&&pb.length>1&&pa[0]===pb[0]&&pa[pa.length-1]===pb[pb.length-1])nm=1}
+      if(!nm){const qa=f2.split(" "),lb=new Set(fl.split(" "));if(qa.length>1&&qa.every(w=>lb.has(w)))nm=2;else if(trusted&&trusted.has(id))nm=2}
+      if(!nm)continue;
+      const sc=nm*10+(occ.includes("Q378622")?3:0)+(e.claims.P27?1:0)+(bd.precision>=11?1:0);
+      if(sc>bs){bs=sc;best={label:lab||name,desc,y:+m[1],mo:+m[2]||6,da:+m[3]||15,e}}}
+    return best};
+  const vars=[...new Set([cl,ns,cl.normalize("NFD").replace(/[̀-ͯ]/g,""),name.trim()].filter(x=>x&&x.length>2))].slice(0,3);
+  const ids=new Set();let ok=0,bad=0;
+  for(const v of vars){try{const r=await wdJ(WDB+"&action=wbsearchentities&language=en&type=item&limit=10&search="+encodeURIComponent(v));ok++;(r.search||[]).forEach(x=>ids.add(x.id))}catch(err){bad++}}
+  let best=null;
+  if(ids.size){try{best=await evalIds(ids)}catch(err){bad++}}
+  if(!best){
+    try{const tt=[...new Set([cl,ns])].join("|");const r=await wdJ("https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=pageprops&ppprop=wikibase_item&titles="+encodeURIComponent(tt));ok++;
+      const w=new Set();Object.values((r.query&&r.query.pages)||{}).forEach(pg=>{if(pg.pageprops&&pg.pageprops.wikibase_item)w.add(pg.pageprops.wikibase_item)});
+      if(w.size)best=await evalIds(w,w)}catch(err){bad++}}
+  if(!best){
+    try{const r=await wdJ("https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=6&prop=pageprops&ppprop=wikibase_item&gsrsearch="+encodeURIComponent(cl+" racing driver"));ok++;
+      const w=new Set();Object.values((r.query&&r.query.pages)||{}).forEach(pg=>{if(pg.pageprops&&pg.pageprops.wikibase_item)w.add(pg.pageprops.wikibase_item)});
+      if(w.size)best=await evalIds(w)}catch(err){bad++}}
+  if(!best&&bad)throw new Error("net");
+  return best;
+}
+async function wdNat(e){
+  const val=cl=>cl&&cl.mainsnak&&cl.mainsnak.datavalue&&cl.mainsnak.datavalue.value&&cl.mainsnak.datavalue.value.id;
+  const labs=async ids=>{ids=[...new Set(ids.filter(Boolean))].slice(0,20);const o={};if(!ids.length)return o;
+    const r=await wdJ(WDB+"&action=wbgetentities&props=labels&languages=en&ids="+ids.join("|"));ids.forEach(i=>{const l=r.entities&&r.entities[i]&&r.entities[i].labels&&r.entities[i].labels.en;if(l)o[i]=l.value});return o};
+  const pick=arr=>{const c=arr.map(natNorm).filter(Boolean);return c.find(x=>NATS[x])||c[0]||""};
+  try{
+    let cs=(e.claims.P27||[]).filter(x=>x.rank!=="deprecated");
+    const cur=cs.filter(x=>!(x.qualifiers&&x.qualifiers.P582));if(cur.length)cs=cur;
+    cs.sort((a,b)=>(b.rank==="preferred")-(a.rank==="preferred"));
+    if(cs.length){const L=await labs(cs.map(val));const n=pick(cs.map(x=>L[val(x)]).filter(Boolean));if(n)return n}
+  }catch(err){}
+  const d=(e.descriptions&&e.descriptions.en&&e.descriptions.en.value)||"";
+  for(const [re,c] of DEMO_RE)if(re.test(d))return c;
+  try{
+    const sp=(e.claims.P1532||[]).map(val);
+    if(sp.length){const L=await labs(sp);const n=pick(sp.map(x=>L[x]).filter(Boolean));if(n&&NATS[n])return n}
+    const pl=(e.claims.P19||[]).map(val).filter(Boolean)[0];
+    if(pl){const r=await wdJ(WDB+"&action=wbgetentities&props=claims&ids="+pl);const pe=r.entities&&r.entities[pl];
+      const co=((pe&&pe.claims&&pe.claims.P17)||[]).map(val);if(co.length){const L=await labs(co);const n=pick(co.map(x=>L[x]).filter(Boolean));if(n)return n}}
+  }catch(err){}
+  return "";
+}
+async function wdLookup(name,wantNat){
+  const key=wdFold(name);let c=wdCache.get(key);
+  if(!c){c=wdFind(name);wdCache.set(key,c)}
+  let r;try{r=await c}catch(err){wdCache.delete(key);throw err}
+  if(!r)return null;
+  if(wantNat&&r.nat==null)r.nat=await wdNat(r.e);
+  return {label:r.label,desc:r.desc,y:r.y,mo:r.mo,da:r.da,nat:r.nat||""};
 }
 function ageRef(){let best="";SERIES.forEach(([k])=>{const dd=docs[docId(k,ui.year)];if(dd)dd.races.forEach(r=>{if(r.date&&(!best||r.date<best))best=r.date})});
   const m=best.match(/^(\d{4})-(\d\d)-(\d\d)/);return m?{y:+m[1],mo:+m[2],da:+m[3],txt:best}:{y:ui.year,mo:2,da:15,txt:ui.year+"-02-15"}}
@@ -1169,17 +1340,44 @@ function modalAges(){
     ${m.status==="error"?`<div class="empty">Couldn't reach Wikidata from here. This page may block outside connections. The standalone tracker on your own site usually can.</div>`:""}
     ${m.rows.length?`<div class="card tw" style="max-height:420px;overflow:auto"><table><thead><tr><th></th><th>Driver</th><th>Found</th><th class="n">Born</th><th class="n">Age</th><th class="n">Now</th></tr></thead><tbody>${m.rows.map((r,i)=>`<tr class="${r.use?"":"dim"}"><td><input type="checkbox" data-agu="${i}" ${r.use?"checked":""} aria-label="Use age for ${esc(r.name)}"></td><td>${esc(r.name)}</td><td>${esc(r.label)}<div class="small muted">${esc(r.desc)}</div></td><td class="n">${r.y}-${String(r.mo).padStart(2,"0")}-${String(r.da).padStart(2,"0")}</td><td class="n"><b>${r.age}</b></td><td class="n">${r.cur===""?"–":esc(r.cur)}</td></tr>`).join("")}</tbody></table></div>`:""}
     ${m.status==="done"?`<div class="small muted">${m.rows.length} found${m.miss.length?`. Not found: ${esc(m.miss.join(", "))}`:""}</div>`:""}
+    ${m.status==="done"&&m.errs&&m.errs.length?`<div class="small" style="color:var(--bad,#c0392b)">Couldn't check ${m.errs.length} (${esc(m.errs.join(", "))}) because Wikipedia/Wikidata was busy or unreachable. Close this and run the lookup again; finished ones are remembered.</div>`:""}
   </div>
   <footer><span class="small muted">Existing ages are only replaced if you leave them checked.</span><span class="sp"></span><button class="btn pri" data-act="ageApply" ${n?"":"disabled"}>Apply ${n} age${n===1?"":"s"}</button></footer></div>`;
+}
+function modalNats(){
+  const m=ui.modal,n=m.rows.filter(r=>r.use&&r.nat).length;
+  return `<div class="dlg" role="dialog" aria-label="Look up nationalities" data-s="${ui.series}" style="max-width:760px"><header><h3>Look up real nationalities</h3><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  <div class="body" style="display:flex;flex-direction:column;gap:12px">
+    <div class="help">Searches Wikidata for each driver's country of citizenship. Check each match before applying, since made-up drivers and common names can match the wrong person. Drivers who already have a nationality start unticked.</div>
+    ${m.status==="running"?`<div class="muted">Looking up ${m.done} of ${m.total}…</div>`:""}
+    ${m.status==="error"?`<div class="empty">Couldn't reach Wikidata from here. This page may block outside connections. The standalone tracker on your own site usually can.</div>`:""}
+    ${m.rows.length?`<div class="card tw" style="max-height:420px;overflow:auto"><table><thead><tr><th></th><th>Driver</th><th>Found</th><th>Now</th><th>Nationality</th></tr></thead><tbody>${m.rows.map((r,i)=>`<tr class="${r.use&&r.nat?"":"dim"}"><td><input type="checkbox" data-nu="${i}" ${r.use&&r.nat?"checked":""} ${r.nat?"":"disabled"} aria-label="Use nationality for ${esc(r.name)}"></td><td>${esc(r.name)}</td><td>${esc(r.label)}<div class="small muted">${esc(r.desc)}</div></td><td>${natHtml(r.cur)||'<span class="muted">–</span>'}</td><td>${r.nat?"<b>"+natHtml(r.nat)+"</b>":'<span class="muted">not listed</span>'}</td></tr>`).join("")}</tbody></table></div>`:""}
+    ${m.status==="done"?`<div class="small muted">${m.rows.length} found${m.miss.length?`. Not found: ${esc(m.miss.join(", "))}`:""}</div>`:""}
+    ${m.status==="done"&&m.errs&&m.errs.length?`<div class="small" style="color:var(--bad,#c0392b)">Couldn't check ${m.errs.length} (${esc(m.errs.join(", "))}) because Wikipedia/Wikidata was busy or unreachable. Close this and run the lookup again; finished ones are remembered.</div>`:""}
+  </div>
+  <footer><span class="small muted">A nationality applies to the driver in every series and season.</span><span class="sp"></span><button class="btn pri" data-act="natApply" ${n?"":"disabled"}>Apply ${n}</button></footer></div>`}
+async function natRun(m){
+  const names=new Map();
+  Object.values(docs).forEach(dd=>{if(dd&&dd.drivers)dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(!key)return;const o=names.get(key);if(!o)names.set(key,{name:x.name.trim(),cur:x.nat||""});else if(!o.cur&&x.nat)o.cur=x.nat})});
+  const list=[...names.values()];m.total=list.length;m.done=0;m.status="running";m.rows=[];m.miss=[];m.errs=[];renderModal();
+  let q=0,fail=0;
+  const work=async()=>{while(q<list.length&&ui.modal===m){const it=list[q++];
+    try{const f=await wdLookup(it.name,true);if(f)m.rows.push(Object.assign({name:it.name,cur:it.cur},f,{use:it.cur===""&&!!f.nat}));else m.miss.push(it.name)}
+    catch(e){fail++;m.errs.push(it.name);if(fail>=6&&!m.rows.length){q=list.length}}
+    m.done++;if(m.done%3===0||m.done===m.total)if(ui.modal===m)renderModal()}};
+  await Promise.all([work(),work(),work()]);
+  if(ui.modal!==m)return;
+  m.rows.sort((a,b)=>a.name.localeCompare(b.name));
+  m.status=fail&&!m.rows.length?"error":"done";renderModal();
 }
 async function ageRun(m){
   const names=new Map();
   SERIES.forEach(([k])=>{const dd=docs[docId(k,ui.year)];if(dd)dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(key&&!names.has(key))names.set(key,{name:x.name.trim(),cur:x.age==null?"":x.age})})});
-  const list=[...names.values()];m.total=list.length;m.done=0;m.status="running";m.rows=[];m.miss=[];renderModal();
+  const list=[...names.values()];m.total=list.length;m.done=0;m.status="running";m.rows=[];m.miss=[];m.errs=[];renderModal();
   let q=0,fail=0;
   const work=async()=>{while(q<list.length&&ui.modal===m){const it=list[q++];
     try{const f=await wdLookup(it.name);if(f){const age=ageOn(f,m.ref);m.rows.push(Object.assign({name:it.name,cur:it.cur,age},f,{use:it.cur===""}))}else m.miss.push(it.name)}
-    catch(e){fail++;if(fail>=3&&!m.rows.length){q=list.length}}
+    catch(e){fail++;m.errs.push(it.name);if(fail>=6&&!m.rows.length){q=list.length}}
     m.done++;if(m.done%3===0||m.done===m.total)if(ui.modal===m)renderModal()}};
   await Promise.all([work(),work(),work()]);
   if(ui.modal!==m)return;
@@ -1192,14 +1390,14 @@ function vDrivers(d0){
     dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(!key)return;let e=by.get(key);if(!e){e={name:x.name,retired:false,yrs:new Map()};by.set(key,e)}
       if(x.retired)e.retired=true;
       if(!e.yrs.has(dd.year))e.yrs.set(dd.year,[]);
-      e.yrs.get(dd.year).push({s:dd.series,sn:dd.name||dd.series,id:x.id,num:x.num,team:x.team,age:x.age,year:dd.year})})});
+      e.yrs.get(dd.year).push({s:dd.series,sn:dd.name||dd.series,id:x.id,num:x.num,team:x.team,age:x.age,year:dd.year});if(x.nat&&!e.nat)e.nat=x.nat})});
   const people=[...by.values()].map(e=>{
     const ys=[...e.yrs.keys()].sort((a,b)=>a-b),show=e.yrs.has(Y)?Y:(ys.filter(y=>y<Y).pop()||ys[0]),ent=e.yrs.get(show);
     const age=(ent.find(z=>z.age!==""&&z.age!=null)||{}).age;
-    return {name:e.name,age:age==null?"":age,ent,year:show,status:e.retired?"Retired":e.yrs.has(Y)?"Active":"Inactive"}});
+    return {name:e.name,nat:e.nat||"",age:age==null?"":age,ent,year:show,status:e.retired?"Retired":e.yrs.has(Y)?"Active":"Inactive"}});
   const cnt={all:people.length,Active:0,Inactive:0,Retired:0};people.forEach(x=>cnt[x.status]++);
   const flt=ui.drvFilter||"all";
-  let list=people.filter(e=>(flt==="all"||e.status===flt)&&(!f||(e.name+" "+e.status+" "+e.ent.map(z=>z.num+" "+z.team+" "+z.sn).join(" ")).toLowerCase().includes(f)));
+  let list=people.filter(e=>(flt==="all"||e.status===flt)&&(!f||(e.name+" "+e.nat+" "+e.status+" "+e.ent.map(z=>z.num+" "+z.team+" "+z.sn).join(" ")).toLowerCase().includes(f)));
   const c=ui.drvSort||"name",dir=ui.drvDir||1,first=(e,fld)=>String((e.ent[0]||{})[fld]||"");
   list.sort((a,b)=>{let r;
     if(c==="age")r=(a.age===""?999:+a.age)-(b.age===""?999:+b.age);
@@ -1207,16 +1405,17 @@ function vDrivers(d0){
     else if(c==="team")r=first(a,"team").localeCompare(first(b,"team"),undefined,{sensitivity:"base"});
     else if(c==="series")r=first(a,"sn").localeCompare(first(b,"sn"));
     else if(c==="status")r=a.status.localeCompare(b.status);
+    else if(c==="nat")r=(a.nat||"~").localeCompare(b.nat||"~");
     else if(c==="year")r=a.year-b.year;
     else r=a.name.localeCompare(b.name);
     return r*dir||a.name.localeCompare(b.name)});
-  const head=[["name","Driver"],["status","Status"],["age","Age"],["num","#"],["team","Team"],["series","Series"],["year","Season"]].map(([k,n])=>`<th class="s ${c===k?"on":""}" data-act="sortDrvs" data-v="${k}">${n}${c===k?(dir>0?" ▲":" ▼"):""}</th>`).join("");
+  const head=[["name","Driver"],["status","Status"],["age","Age"],["nat","Nationality"],["num","#"],["team","Team"],["series","Series"],["year","Season"]].map(([k,n])=>`<th class="s ${c===k?"on":""}" data-act="sortDrvs" data-v="${k}">${n}${c===k?(dir>0?" ▲":" ▼"):""}</th>`).join("");
   const pill={Active:"ok",Inactive:"",Retired:"rk"};
   const rows=list.map(e=>{const one=z=>e.ent.map(z).join("");
-    return `<tr><td class="name"><a href="#" data-act="drvAt" data-s="${e.ent[0].s}" data-id="${e.ent[0].id}" data-y="${e.year}">${esc(e.name)}</a></td><td><span class="pill ${pill[e.status]}">${e.status}</span></td><td class="n">${e.age===""?'<span class="muted">–</span>':esc(e.age)}</td>
+    return `<tr><td class="name"><a href="#" data-act="drvAt" data-s="${e.ent[0].s}" data-id="${e.ent[0].id}" data-y="${e.year}">${esc(e.name)}</a></td><td><span class="pill ${pill[e.status]}">${e.status}</span></td><td class="n">${e.age===""?'<span class="muted">–</span>':esc(e.age)}</td><td>${e.nat?natLink(e.nat):'<span class="muted">–</span>'}</td>
     <td>${one(z=>`<div><span class="car">${esc(z.num)}</span></div>`)}</td><td>${one(z=>`<div>${teamLink(z)||'<span class="muted">–</span>'}</div>`)}</td><td>${one(z=>`<div><a href="#" data-act="serAt" data-s="${z.s}" data-y="${z.year}">${esc(z.sn)}</a></div>`)}</td><td class="n">${e.year}</td></tr>`}).join("");
   const seg=`<div class="seg" role="group" aria-label="Filter drivers">${[["all","All Drivers",cnt.all],["Active","Active Drivers",cnt.Active],["Inactive","Inactive Drivers",cnt.Inactive],["Retired","Retired Drivers",cnt.Retired]].map(([v,n,k])=>`<button data-act="drvFilter" data-v="${v}" class="${flt===v?"on":""}">${n} ${k}</button>`).join("")}</div>`;
-  return `<div class="row"><h2>Drivers · ${list.length}</h2><span class="sp"></span><input type="text" id="filter" placeholder="Filter by name, team, #, series" value="${esc(ui.filter)}" style="width:240px"><button class="btn" data-act="ageLookup" title="Find real drivers' birth dates and fill in their ages for this season">Look up real ages</button></div>
+  return `<div class="row"><h2>Drivers · ${list.length}</h2><span class="sp"></span><input type="text" id="filter" placeholder="Filter by name, team, #, series" value="${esc(ui.filter)}" style="width:240px"><button class="btn" data-act="ageLookup" title="Find real drivers' birth dates and fill in their ages for this season">Look up real ages</button><button class="btn" data-act="natLookup" title="Find real drivers' nationalities">Look up nationalities</button></div>
     <div class="row">${seg}</div>
     <div class="help"><b>Active</b> drivers are on a roster in the ${Y} season. <b>Inactive</b> drivers raced in other seasons but are not in ${Y}. <b>Retired</b> drivers are the ones marked retired in their profile. The number, team and series shown are from the season in the last column. A driver who runs in more than one series is listed once.</div>
     <div class="card tw">${list.length?`<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No drivers match.</div>'}</div>`;
@@ -1684,9 +1883,9 @@ function gfxDrawStd(m,cv){
   // stat tiles
   const all=m.std,lead=all[0],second=all[1];
   const top=f=>{let b=null;all.forEach(r=>{if(r[f]>0&&(!b||r[f]>b[f]))b=r});return b};
-  const lab=r=>r?((m.owners?"#"+r.num+" ":"")+r.name):"–";
+  const lab=r=>r?((m.owners&&!m.teams?"#"+r.num+" ":"")+r.name):"–";
   const tw=top("wins"),tl=top("led"),winners=all.filter(r=>r.wins>0).length;
-  const tiles=[["LEADER",lab(lead),lead?lead.pts+" pts":""],["LEAD OVER 2ND",lead&&second?String(lead.pts-second.pts):"–",lead&&second?"points":""],["MOST WINS",tw?lab(tw):"–",tw?tw.wins+(tw.wins===1?" win":" wins"):""],["MOST LAPS LED",tl?lab(tl):"–",tl?tl.led+" laps":""],["DIFFERENT WINNERS",String(winners),m.owners?"cars":"drivers"]];
+  const tiles=[["LEADER",lab(lead),lead?lead.pts+" pts":""],["LEAD OVER 2ND",lead&&second?String(Math.round((lead.pts-second.pts)*10)/10):"–",lead&&second?"points":""],["MOST WINS",tw?lab(tw):"–",tw?tw.wins+(tw.wins===1?" win":" wins"):""],["MOST LAPS LED",tl?lab(tl):"–",tl?tl.led+" laps":""],["DIFFERENT WINNERS",String(winners),m.teams?"teams":m.owners?"cars":"drivers"]];
   const gap=14,tW=(W-2*pad-gap*(tiles.length-1))/tiles.length;
   tiles.forEach(([h,v,sub],i)=>{const tx=pad+i*(tW+gap);rr(tx,tileY,tW,tileH,12);x.fillStyle=t.tile;x.fill();
     x.fillStyle=acc;x.fillRect(tx+16,tileY+16,22,3);
@@ -1697,7 +1896,7 @@ function gfxDrawStd(m,cv){
   const defs=[{h:"WINS",k:"wins",w:70},{h:"T5",k:"t5",w:58},{h:"T10",k:"t10",w:62},{h:"POLES",k:"poles",w:76},{h:"LED",k:"led",w:70},{h:"AVG",k:"avg",w:70},{h:"GAP",k:"lead",w:92},{h:"PTS",k:"pts",w:96}];
   const cols=defs;let rx=W-pad-14;const pos=[];for(let j=cols.length-1;j>=0;j--){pos[j]=rx;rx-=cols[j].w}
   x.fillStyle=MU;x.font=`700 11px ${F}`;x.textAlign="right";cols.forEach((c,j)=>x.fillText(c.h,pos[j],tblY+24));
-  x.textAlign="left";x.fillText("POS",pad+14,tblY+24);x.fillText("CAR",pad+72,tblY+24);x.fillText(m.owners?"TEAM":"DRIVER",pad+136,tblY+24);
+  x.textAlign="left";x.fillText("POS",pad+14,tblY+24);x.fillText(m.teams?"CARS":"CAR",pad+72,tblY+24);x.fillText(m.owners||m.teams?"TEAM":"DRIVER",pad+136,tblY+24);
   const nameW=pos[0]-cols[0].w-(pad+136)-14;
   rows.forEach((r,i)=>{
     const y=tblY+hdrH+i*rowH+(cutIdx>=0&&i>=cutIdx?cutH:0);
@@ -2240,11 +2439,11 @@ function modalDriver(){
   const serOpts=[...new Map(allD.map(dd=>[dd.series,dd.name])).entries()];
   const yrs=sDocs.map(dd=>{const dxA=dd.drivers.filter(same),dx=dxA[0],dxs=dx?act(dd,dxA):[];if(!dx)return "";const z=agg([dd],(a,b)=>b.id).get(dx.id);
     const ar=avgRate(dx,"d"),sr=standings(dd).rows.filter(r=>r.pf!==false),ix=dxs.every(q=>q.pf===false)?-1:sr.findIndex(r=>r.id===dx.id),pos=ix>=0&&z.starts>0?ix+1:null,mk=dd.series+"|"+dd.year,col=!!(m0.cl&&m0.cl[mk]),multi=dxs.length>1;return `<tr ${multi?`class="tog" style="cursor:pointer" data-act="carsTog" data-k="${mk}" title="Click to ${col?"show":"hide"} each car"`:""}><td>${multi?(col?"▸ ":"▾ "):""}${dd.year}</td>${multiH?`<td>${esc(dd.name)}</td>`:""}<td class="n">${joinU(dxs.map(q=>q.num)).map(v=>`<span class="car">${esc(v)}</span>`).join(" ")||'<span class="car"></span>'}</td><td class="n">${(dxs.find(q=>q.age!==""&&q.age!=null)||{}).age??"–"}</td><td>${esc(joinU(dxs.map(q=>q.team)).join(" / "))}</td><td class="n">${pos?"<b>"+pos+"</b>":"–"}</td><td class="n">${z.starts}</td><td class="n">${z.wins}</td><td class="n">${z.poles}</td><td class="n">${z.t5}</td><td class="n">${z.t10}</td><td class="n">${z.led}</td><td class="n">${z.avgF!=null?fmt(z.avgF):"–"}</td><td class="n">${z.pts}</td><td class="n">${ar==null?"–":f1(ar)}</td></tr>`+(multi&&!col?(()=>{const rm=agg([dd],(q,w)=>w.id,true);return dxs.map(q=>{const y=rm.get(q.id);if(!y)return "";const qr=avgRate(q,"d");return `<tr class="sub muted"><td></td>${multiH?"<td></td>":""}<td class="n"><span class="car">${esc(q.num)}</span></td><td></td><td>↳ ${esc(q.team||"")}</td><td class="n">–</td><td class="n">${y.starts}</td><td class="n">${y.wins}</td><td class="n">${y.poles}</td><td class="n">${y.t5}</td><td class="n">${y.t10}</td><td class="n">${y.led}</td><td class="n">${y.avgF!=null?fmt(y.avgF):"–"}</td><td class="n">${y.pts}</td><td class="n">${qr==null?"–":f1(qr)}</td></tr>`}).join("")})():"")}).join("");
-  return `<div class="dlg" role="dialog" aria-label="Driver card" data-s="${ui.series}"><header><span class="car" style="font-size:22px">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.num)).join("/")||dr.num)}</span><h3>${esc(dr.name)}</h3><span class="muted">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.team)).join(" / "))} ${joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).length?"· "+esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).join(" / ")):""}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  return `<div class="dlg" role="dialog" aria-label="Driver card" data-s="${ui.series}"><header><span class="car" style="font-size:22px">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.num)).join("/")||dr.num)}</span><h3>${esc(dr.name)}</h3><span class="muted">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.team)).join(" / "))} ${joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).length?"· "+esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).join(" / ")):""}</span>${dr.nat?natLink(dr.nat):""}<span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body"><div class="row" style="gap:12px;margin-bottom:12px"><label class="fld">Series<select data-tf="sf"><option value="all">All series</option>${serOpts.map(([k,n])=>`<option value="${k}" ${sf===k?"selected":""}>${esc(n)}</option>`).join("")}</select></label>
     <label class="fld">Season<select data-tf="yf"><option value="all" ${yf==="all"?"selected":""}>All seasons</option>${yrsL.map(y=>`<option value="${y}" ${yf===y?"selected":""}>${y}</option>`).join("")}</select></label></div>
   <div class="grid2"><div><h3>Driver ratings <span class="muted" style="font-size:15px">avg ${avgRate(dr,"d")==null?"–":f1(avgRate(dr,"d"))}</span></h3>${RATE.filter(r=>r[2]==="d").map(([c,n])=>{const v=rg(dr,c);return `<div class="rt"><span>${n}</span><i><b style="margin-left:${v?v.a:0}%;width:${v?Math.max(v.b-v.a,1):0}%"></b></i><span class="n">${rtxt(v)}</span></div>`}).join("")}</div>
-  <div><h3>${esc(scope)}</h3><dl class="kv" style="margin-top:6px"><dt>Retired</dt><dd><label class="row" style="gap:6px"><input type="checkbox" class="chk" data-ed="drv" data-id="${dr.id}" data-k="retired" ${dr.retired?"checked":""}> <span class="small muted">No longer racing</span></label></dd><dt>Age</dt><dd><input type="number" class="w-s" min="0" max="120" data-ed="drv" data-id="${dr.id}" data-k="age" value="${esc(dr.age==null?"":dr.age)}" aria-label="Age" placeholder="–"></dd>${ents.length===1?`<dt>Points</dt><dd><b>${s.pts}</b></dd>`:""}<dt>Starts</dt><dd>${s.starts}</dd><dt>Crown jewels</dt><dd>${(()=>{const ids=new Set(ents.flatMap(e=>e.dxs.map(q=>q.id)));const w=crownRaces(sel).filter(z=>z.dv&&ids.has(z.dv.id));return w.length?`<b>${w.length}</b> <span class="small muted">${w.map(z=>`<span class="gem">◆</span> ${z.dd.year} ${esc(z.r.name||z.r.track)}`).join(" · ")}</span>`:"0"})()}</dd><dt>Wins / Poles</dt><dd>${s.wins} / ${s.poles}</dd><dt>Top 5 / Top 10</dt><dd>${s.t5} / ${s.t10}</dd><dt>Laps led</dt><dd>${s.led}</dd><dt>Laps completed</dt><dd>${s.laps}</dd><dt>Avg start / finish</dt><dd>${s.avgS!=null?fmt(s.avgS):"–"} / ${s.avgF!=null?fmt(s.avgF):"–"}</dd><dt>DNFs</dt><dd>${s.dnf}</dd></dl></div></div>
+  <div><h3>${esc(scope)}</h3><dl class="kv" style="margin-top:6px"><dt>Retired</dt><dd><label class="row" style="gap:6px"><input type="checkbox" class="chk" data-ed="drv" data-id="${dr.id}" data-k="retired" ${dr.retired?"checked":""}> <span class="small muted">No longer racing</span></label></dd><dt>Age</dt><dd><input type="number" class="w-s" min="0" max="120" data-ed="drv" data-id="${dr.id}" data-k="age" value="${esc(dr.age==null?"":dr.age)}" aria-label="Age" placeholder="–"></dd><dt>Nationality</dt><dd><input type="text" list="natList" class="w-l" data-ed="drv" data-id="${dr.id}" data-k="nat" value="${esc(dr.nat||"")}" aria-label="Nationality" placeholder="–"> <span class="natflag">${flagHtml(dr.nat)}</span><datalist id="natList">${Object.keys(NATS).map(c=>`<option value="${c}">`).join("")}</datalist></dd>${ents.length===1?`<dt>Points</dt><dd><b>${s.pts}</b></dd>`:""}<dt>Starts</dt><dd>${s.starts}</dd><dt>Crown jewels</dt><dd>${(()=>{const ids=new Set(ents.flatMap(e=>e.dxs.map(q=>q.id)));const w=crownRaces(sel).filter(z=>z.dv&&ids.has(z.dv.id));return w.length?`<b>${w.length}</b> <span class="small muted">${w.map(z=>`<span class="gem">◆</span> ${z.dd.year} ${esc(z.r.name||z.r.track)}`).join(" · ")}</span>`:"0"})()}</dd><dt>Wins / Poles</dt><dd>${s.wins} / ${s.poles}</dd><dt>Top 5 / Top 10</dt><dd>${s.t5} / ${s.t10}</dd><dt>Laps led</dt><dd>${s.led}</dd><dt>Laps completed</dt><dd>${s.laps}</dd><dt>Avg start / finish</dt><dd>${s.avgS!=null?fmt(s.avgS):"–"} / ${s.avgF!=null?fmt(s.avgF):"–"}</dd><dt>DNFs</dt><dd>${s.dnf}</dd></dl></div></div>
   <h3 style="margin-top:16px">By season</h3><div class="tw"><table><thead><tr><th>Year</th>${multiH?"<th>Series</th>":""}<th class=n>#</th><th class=n>Age</th><th>Team</th><th class=n title="Final points position, for drivers running for points">Pos</th><th class=n>Starts</th><th class=n>Wins</th><th class=n>Poles</th><th class=n>T5</th><th class=n>T10</th><th class=n>Led</th><th class=n>Avg fin</th><th class=n>Pts</th><th class=n>Avg rating</th></tr></thead><tbody>${yrs}</tbody></table></div>
   ${(()=>{const xs=(d.exh||[]).map(ev=>{const x=(ev.res||[]).find(z=>z.d===dr.id);return x&&!ui.logCrown&&(!ui.logWins||x.f===1)?`<tr><td><a href="#" data-act="exrace" data-id="${ev.id}" data-from="${dr.id}">${esc(ev.name)||"Event"}</a></td><td>${esc(ev.kind||"")}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td></tr>`:""}).join("");return xs?`<h3 style="margin-top:16px">${d.year} exhibitions</h3><div class="tw"><table><thead><tr><th>Event</th><th>Type</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th></tr></thead><tbody>${xs}</tbody></table></div>`:""})()}
   <div class="row" style="margin-top:16px"><h3>${yf==="all"?"Race log":yf+" race log"}</h3><span class="sp"></span>${logSeg()}</div>${log?`<div class="tw"><table><thead><tr>${lyh}<th class=n>#</th><th>Race</th><th>Track</th><th class=n>Car</th><th>Team</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th><th class=n title="Gap to the race leader">Interval</th><th class=n>Pts</th></tr></thead><tbody>${log}</tbody></table></div>`:'<p class="muted">'+(ui.logWins?"No wins for this selection.":"No results yet for this selection.")+'</p>'}</div></div>`;
@@ -2253,7 +2452,7 @@ function renderModal(){withHidden(renderModal0)}
 function renderModal0(){
   const el=$("#modal");
   if(!ui.modal){el.innerHTML="";return}
-  el.innerHTML=ui.modal.type==="simseason"?modalSimSeason():ui.modal.type==="help"?modalHelp():ui.modal.type==="numprof"?modalNum():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="dlu"?modalDlu():ui.modal.type==="ages"?modalAges():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="points"?modalPoints():ui.modal.type==="rlook"?modalRLook():ui.modal.type==="gen"?modalGen():ui.modal.type==="track"?modalTrack():ui.modal.type==="gfx"?modalGfx():modalDriver();
+  el.innerHTML=ui.modal.type==="nats"?modalNats():ui.modal.type==="simseason"?modalSimSeason():ui.modal.type==="help"?modalHelp():ui.modal.type==="numprof"?modalNum():ui.modal.type==="bulk"?modalBulk():ui.modal.type==="rbulk"?modalRBulk():ui.modal.type==="lineup"?modalLineup():ui.modal.type==="dlu"?modalDlu():ui.modal.type==="ages"?modalAges():ui.modal.type==="tmr"?modalTeamRatings():ui.modal.type==="bld"?modalBuild():ui.modal.type==="merge"?modalMerge():ui.modal.type==="saves"?modalSaves():ui.modal.type==="sugg"?modalSugg():ui.modal.type==="race"?modalRace():ui.modal.type==="team"?modalTeam():ui.modal.type==="country"?modalCountry():ui.modal.type==="points"?modalPoints():ui.modal.type==="rlook"?modalRLook():ui.modal.type==="gen"?modalGen():ui.modal.type==="track"?modalTrack():ui.modal.type==="gfx"?modalGfx():modalDriver();
   if(ui.modal.type==="gfx")gfxDraw();
 }
 function openRace(id,exh){
@@ -2706,6 +2905,7 @@ const ACT={
   exKind:b=>{ui.exKind=b.dataset.v},
   exportCars:()=>{exportCars();return "nr"},
   carPick:()=>{$("#carFile").click();return "nr"},
+  country:b=>{const n=b.dataset.n;if(!Object.values(docs).some(dd=>dd&&((dd.drivers&&dd.drivers.some(x=>natNorm(x.nat)===n))||(dd.teams&&Object.values(dd.teams).some(q=>q&&natNorm(q.nat)===n))))){toast("Nothing from that country");return "nr"}ui.modal={type:"country",n};renderModal();return "nr"},
   team:b=>{const k=String(b.dataset.t).trim().toLowerCase();if(!Object.values(docs).some(dd=>dd&&dd.drivers&&dd.drivers.some(x=>teamKey(x)===k))){toast("That team isn't on any roster");return "nr"}ui.modal={type:"team",team:b.dataset.t};renderModal();return "nr"},
   exadd:()=>{const d=cur();d.exh=d.exh||[];const k=($("#exKind")||{}).value||"Other";d.exh.push({id:uid(),date:"",name:k,kind:k,track:"",laps:"",done:false,res:[]});touch(docId(d.series,d.year))},
   exdel:b=>{const d=cur();d.exh=(d.exh||[]).filter(r=>r.id!==b.dataset.id);touch(docId(d.series,d.year))},
@@ -2788,6 +2988,8 @@ const ACT={
   calNav:b=>{const v=b.dataset.v;if(v==="today"){ui.cal=null;ui.calFor=null;return}const c=calMonth(),[y,m]=c.split("-").map(Number),dt=new Date(Date.UTC(y,m-1+(+v),1));ui.cal=dt.getUTCFullYear()+"-"+String(dt.getUTCMonth()+1).padStart(2,"0");ui.calFor=ui.year},
   calOpen:b=>{const cm0=calMonth(),yy=+b.dataset.y;if(yy&&yy!==ui.year&&docs[docId(b.dataset.s,yy)]){ui.year=yy;ui.cal=cm0;ui.calFor=yy}ui.series=b.dataset.s;openRace(b.dataset.id,b.dataset.x==="1")},
   rateGroup:b=>{ui.rateGroup=b.dataset.v},
+  natLookup:()=>{const m={type:"nats",rows:[],miss:[],status:"running",done:0,total:0};ui.modal=m;renderModal();natRun(m);return "nr"},
+  natApply:()=>{const m=ui.modal,sel=m.rows.filter(r=>r.use&&r.nat);sel.forEach(r=>{Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===r.name.toLowerCase()){z.nat=r.nat;ch=true}});if(ch)touch(did)}})});ui.modal=null;renderModal();toast(sel.length+" nationalit"+(sel.length===1?"y":"ies")+" updated")},
   ageLookup:()=>{const m={type:"ages",rows:[],miss:[],ref:ageRef(),status:"running",done:0,total:0};ui.modal=m;renderModal();ageRun(m);return "nr"},
   ageApply:()=>{const m=ui.modal,sel=m.rows.filter(r=>r.use);let n=0;
     sel.forEach(r=>{Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.year===ui.year){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===r.name.toLowerCase()){z.age=r.age;ch=true}});if(ch)touch(did)}});n++});
@@ -2967,6 +3169,7 @@ document.addEventListener("change",e=>{
       if(bad.length)toast("No qualifying session found in: "+bad.join(", "));
       if(ui.modal&&ui.modal.type==="lineup")renderModal()});return}
   if(ui.modal&&ui.modal.type==="gfx"&&t.dataset.gx){const k=t.dataset.gx;ui.modal[k]=k==="top"?(t.value===""?0:Math.max(1,Math.round(num(t.value)))):t.value;gfxDraw();return}
+  if(ui.modal&&ui.modal.type==="nats"&&t.dataset.nu!==undefined){ui.modal.rows[+t.dataset.nu].use=t.checked;renderModal();return}
   if(ui.modal&&ui.modal.type==="ages"&&t.dataset.agu!==undefined){ui.modal.rows[+t.dataset.agu].use=t.checked;renderModal();return}
   if(ui.modal&&ui.modal.type==="dlu"&&t.dataset.dlp){const k=t.dataset.dlp;ui.modal[k]=k==="swap"?t.value==="1":k==="size"?(t.value===""?"":Math.max(1,Math.round(num(t.value)))):t.value;setTimeout(renderModal,0);return}
   if(ui.modal&&ui.modal.type==="lineup"){const mo=ui.modal;
@@ -3000,8 +3203,9 @@ document.addEventListener("change",e=>{
     if(t.dataset.sg){const v=Math.round(num(t.value));mo.adj[t.dataset.id+":"+t.dataset.sg]=v;t.value=v;t.classList.toggle("up",v>0);t.classList.toggle("dn",v<0);return}
     if(t.dataset.sgp){const k=t.dataset.sgp;mo[k]=k==="target"?+t.value:k==="age"?t.checked:Math.max(k==="min"?1:.5,num(t.value));if(k!=="target")mo.adj={};setTimeout(renderModal,0);return}}
   if(t.dataset.pt!==undefined&&ui.modal&&ui.modal.type==="points"&&d){const a=d.settings[ui.modal.key];a[+t.dataset.pt]=Math.max(0,num(t.value));touch(docId(d.series,d.year));return}
+  if(t.dataset.ct){ui[t.dataset.ct]=t.value;render();return}
   if(t.dataset.tt){if(t.dataset.tt==="ser")ui.teamSer=t.value;else{ui.teamSort=t.value;ui.teamDir=(t.value==="name"||t.value==="avgF")?"asc":"desc"}render();return}
-  if(t.dataset.tf&&ui.modal&&["team","driver","numprof"].includes(ui.modal.type)){const mo=ui.modal;mo[t.dataset.tf]=t.value==="all"?"all":t.dataset.tf==="yf"?+t.value:t.value;if(t.dataset.tf==="sf")delete mo.yf;renderModal();return}
+  if(t.dataset.tf&&ui.modal&&["team","driver","numprof","country"].includes(ui.modal.type)){const mo=ui.modal;mo[t.dataset.tf]=t.value==="all"?"all":t.dataset.tf==="yf"?+t.value:t.value;if(t.dataset.tf==="sf")delete mo.yf;renderModal();return}
   if(t.dataset.calpick!==undefined){if(/^\d{4}-\d\d$/.test(t.value)){ui.cal=t.value;ui.calFor=ui.year;render()}return}
   if(t.dataset.dfmt!==undefined){DFMT=t.value;try{localStorage.setItem("nr_datefmt",DFMT)}catch(e){}render();return}
   if(t.dataset.ptpreset!==undefined&&ui.modal&&ui.modal.type==="points"&&d){const pr=presetsFor(ui.modal.key)[t.value];if(pr){d.settings[ui.modal.key]=[...pr[1]];touch(docId(d.series,d.year));setTimeout(renderModal,0)}return}
@@ -3009,6 +3213,7 @@ document.addEventListener("change",e=>{
   if(t.id==="showAll"){ui.showAll=t.checked;render();return}
   if(t.id&&t.id.startsWith("col_")){const k=t.id.slice(4);docsFor(k).forEach(dd=>{dd.color=t.value;touch(docId(dd.series,dd.year))});render();return}
   if(t.id==="exFile"){const fs=[...t.files];t.value="";if(fs.length)importExh(fs);return}
+  if(t.dataset.tm==="nat"&&d&&ui.modal&&ui.modal.type==="team"){const nm=ui.modal.team,k=nm.trim().toLowerCase(),v=natNorm(t.value);t.value=v;Object.keys(docs).forEach(did=>{const dd=docs[did];if(!dd||!dd.drivers)return;if(dd!==d&&!dd.drivers.some(x=>teamKey(x)===k))return;dd.teams=dd.teams||{};const key=Object.keys(dd.teams).find(n=>n.trim().toLowerCase()===k)||nm;dd.teams[key]=dd.teams[key]||{};dd.teams[key].nat=v;touch(did)});setTimeout(()=>{render();renderModal()},0);return}
   if(t.dataset.tm&&d&&ui.modal&&ui.modal.type==="team"){d.teams=d.teams||{};const nm=ui.modal.team;d.teams[nm]=d.teams[nm]||{};d.teams[nm][t.dataset.tm]=t.value;touch(docId(d.series,d.year));return}
   if(t.id==="iniFile"){const fs=[...t.files];t.value="";if(fs.length)importIni(fs);return}
   if(t.id==="carFile"){const fs=[...t.files];t.value="";if(fs.length)importCars(fs);return}
@@ -3033,6 +3238,7 @@ document.addEventListener("change",e=>{
   else if(ed==="drv"){const x=drvOf(d,t.dataset.id);if(x){
     if(k==="age"){const a=String(val).trim()===""?"":Math.max(0,Math.min(120,Math.round(num(val))));t.value=a;x.age=a;
       Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd!==d&&dd.year===d.year)dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()){z.age=a;touch(did)}})})}
+    else if(k==="nat"){const v=natNorm(val);t.value=v;Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()&&(z.nat||"")!==v){z.nat=v;ch=true}});if(ch&&dd!==d)touch(did)}});x.nat=v}
     else if(k==="retired"){const on=!!val;Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()&&!!z.retired!==on){z.retired=on;ch=true}});if(ch)touch(did)}});x.retired=on}
     else x[k]=val}}
   else if(ed==="rate"){const x=drvOf(d,t.dataset.id);if(x){x.r=x.r||{};const td=t.closest("td"),ia=td.querySelector('[data-e="a"]'),ib=td.querySelector('[data-e="b"]');
@@ -3048,6 +3254,7 @@ document.addEventListener("change",e=>{
   else if(ed==="doc"){d.name=val.trim()||d.name;touch(id);setTimeout(render,0);return}
   else if(ed==="set"){d.settings[k]=num(val)}
   else if(ed==="setstr"){d.settings[k]=val}
+  else if(ed==="tstd"){d.settings[k]=val;touch(id);setTimeout(render,0);return}
   else if(ed==="qrd"){const q=d.settings.qrd=d.settings.qrd||{on:false,rounds:3,sizes:[0,24,12]};
     if(k==="on"){q.on=!!val;if(!q.sizes||!q.sizes.length){q.sizes=[0,24,12];q.rounds=3}}
     else if(k==="rounds"){const n=Math.max(2,Math.min(6,Math.round(num(val))||3));q.sizes=q.sizes||[];while(q.sizes.length<n){const pv=q.sizes[q.sizes.length-1]||0;q.sizes.push(Math.max(1,Math.round((pv||24)/2)))}q.sizes=q.sizes.slice(0,n);q.rounds=n}
