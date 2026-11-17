@@ -346,6 +346,43 @@ function parseDate(str,order,yr){
 let slot="main",saves=[{id:"main",name:"Main league"}];
 try{slot=localStorage.getItem("nr_slot")||"main"}catch(e){}
 const raw=new Map();
+/* ---- local storage layer: IndexedDB (large) with localStorage fallback ---- */
+let idb=null;
+const idbOpen=()=>new Promise((res,rej)=>{try{const r=indexedDB.open("nr2003",1);r.onupgradeneeded=()=>{r.result.createObjectStore("kv")};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error||new Error("idb"));r.onblocked=()=>rej(new Error("blocked"))}catch(e){rej(e)}});
+const idbTx=(mode,fn)=>new Promise((res,rej)=>{let t;try{t=idb.transaction("kv",mode);fn(t.objectStore("kv"))}catch(e){rej(e);return}t.oncomplete=()=>res();t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error||new Error("aborted"))});
+const idbAll=()=>new Promise((res,rej)=>{const t=idb.transaction("kv","readonly"),out=new Map(),rq=t.objectStore("kv").openCursor();rq.onsuccess=()=>{const c=rq.result;if(c){out.set(c.key,c.value);c.continue()}else res(out)};rq.onerror=()=>rej(rq.error)});
+const lset=async(k,v)=>{if(idb)await idbTx("readwrite",st=>{st.put(v,k)});else localStorage.setItem(k,JSON.stringify(v))};
+const ldel=async k=>{if(idb)await idbTx("readwrite",st=>{st.delete(k)});else localStorage.removeItem(k)};
+let STO=null;
+async function stoRefresh(){try{if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();STO={u:e.usage||0,q:e.quota||0};if(ui.modal&&ui.modal.type==="saves")renderModal()}}catch(e){}}
+const fmtB=n=>n>=1073741824?(n/1073741824).toFixed(1)+" GB":n>=1048576?(n/1048576).toFixed(1)+" MB":Math.max(1,Math.round(n/1024))+" KB";
+const stoLine=()=>db?"":(idb?(STO&&STO.q?`<div class="small muted">Browser storage: ${fmtB(STO.u)} used of about ${fmtB(STO.q)} that this browser allows for this site.</div>`:""):'<div class="small muted">This browser is using the older storage, which holds about 5 MB.</div>');
+function oldBackupText(old){
+  const list=Array.isArray(old.get("nr_saves"))&&old.get("nr_saves").length?old.get("nr_saves"):[{id:"main",name:"My league"}];
+  const out={format:"nr2003-tracker-backup",version:2,made:new Date().toISOString(),saves:[],photos:[]};
+  list.forEach(sv=>{const dcs={};old.forEach((v,k)=>{if(k.startsWith("nr_doc_")){const [sl,id]=parseSid(k.slice(7));if(sl===sv.id)dcs[id]=v}});out.saves.push({id:sv.id,name:sv.name,docs:dcs})});
+  old.forEach((v,k)=>{if(k.startsWith("nr_ph_")&&v&&v.k&&v.v)out.photos.push({k:v.k,v:v.v})});
+  return JSON.stringify(out);
+}
+function askMigrate(old){return new Promise(res=>{
+  const o=document.createElement("div");o.id="migrateAsk";o.style.cssText="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto";
+  o.innerHTML=`<div role="dialog" aria-modal="true" aria-label="Storage update" style="background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;max-width:520px;width:100%;padding:20px;font-family:var(--f-body)"><h3 style="margin:0 0 8px;font-size:22px">Your saves are moving to larger storage</h3><p style="margin:0 0 10px">This update stores your leagues in a bigger part of your browser, so you won't run out of room as quickly. Your saves are copied across and checked, and the old copy is kept either way.</p><p style="margin:0 0 14px"><b>Please download a backup first.</b> It's a file you can restore from if anything ever goes wrong.</p><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn pri" id="mgBk">Download backup</button><button class="btn" id="mgGo">Continue without a backup</button></div><div class="small muted" id="mgMsg" style="margin-top:10px"></div></div>`;
+  document.body.appendChild(o);
+  const bk=o.querySelector("#mgBk"),go=o.querySelector("#mgGo"),msg=o.querySelector("#mgMsg");let done=false;
+  bk.onclick=async()=>{let ok=false;try{ok=await saveFile("nr2003-tracker-backup-"+new Date().toISOString().slice(0,10)+".json",oldBackupText(old))}catch(e){}
+    if(ok){done=true;msg.textContent="Backup downloaded. Check your Downloads folder before you continue.";go.textContent="Continue";go.className="btn pri";bk.className="btn";bk.textContent="Download again"}else msg.textContent="The backup didn't download. Try again, or continue if you'd rather not."};
+  go.onclick=()=>{o.remove();res(done)};
+  setTimeout(()=>{try{bk.focus()}catch(e){}},50);
+})}
+const LS_KEYS=k=>k==="nr_saves"||k.startsWith("nr_doc_")||k.startsWith("nr_ph_");
+const PH=new Map(),PHID=new Map();
+const phKey=n=>String(n||"").trim().toLowerCase();
+const phId=n=>{const k=phKey(n);let h=2166136261;for(let i=0;i<k.length;i++){h^=k.charCodeAt(i);h=Math.imul(h,16777619)}return (k.replace(/[^a-z0-9]+/g,"-").slice(0,40)||"x")+"_"+(h>>>0).toString(36)};
+const photoOf=n=>PH.get(phKey(n))||"";
+async function phSave(name,v){const k=phKey(name),id=phId(name);if(v){PH.set(k,v);PHID.set(id,k)}else{PH.delete(k);PHID.delete(id)}
+  try{if(db){const ref=db.doc("photos/"+id);if(v)await ref.set({k,v});else await ref.delete()}else{if(v)await lset("nr_ph_"+id,{k,v});else await ldel("nr_ph_"+id)}}
+  catch(e){toast("Couldn't save the photo: "+((e&&(e.message||e.code))||e))}}
+function migratePhotos(){let any=false;Object.keys(docs).forEach(did=>{const dd=docs[did];if(!dd||!dd.drivers)return;let ch=false;dd.drivers.forEach(z=>{if(z.photo){if(!PH.has(phKey(z.name))){phSave(z.name,z.photo)}delete z.photo;ch=true}});if(ch){touch(did);any=true}});return any}
 const sidOf=(sl,id)=>sl==="main"?id:sl+"~"+id;
 const parseSid=sid=>{const i=sid.indexOf("~");return i<0?["main",sid]:[sid.slice(0,i),sid.slice(i+1)]};
 const slotName=()=>(saves.find(x=>x.id===slot)||saves[0]||{name:"Main league"}).name;
@@ -385,7 +422,7 @@ async function flush(){
     try{
       const body=JSON.parse(JSON.stringify(d));
       if(db)await db.doc("league/"+sidOf(slot,id)).set(body);
-      else localStorage.setItem("nr_doc_"+sidOf(slot,id),JSON.stringify(body));
+      else await lset("nr_doc_"+sidOf(slot,id),body);
       raw.set(sidOf(slot,id),body);lastJson[id]=canon(body);
     }catch(e){err=e;pending.add(id)}
   }
@@ -395,19 +432,20 @@ async function flush(){
 }
 async function deleteStoredSid(sid){
   raw.delete(sid);
-  try{if(db)await db.doc("league/"+sid).delete();else localStorage.removeItem("nr_doc_"+sid)}catch(e){toast("Delete failed")}
+  try{if(db)await db.doc("league/"+sid).delete();else await ldel("nr_doc_"+sid)}catch(e){toast("Delete failed")}
 }
 const deleteStored=id=>deleteStoredSid(sidOf(slot,id));
 async function putStored(sid,body){
   raw.set(sid,body);
-  if(db)await db.doc("league/"+sid).set(body);else localStorage.setItem("nr_doc_"+sid,JSON.stringify(body));
+  if(db)await db.doc("league/"+sid).set(body);else await lset("nr_doc_"+sid,body);
 }
 async function writeSaves(){
-  try{if(db)await db.doc("league/_saves").set({list:saves});else localStorage.setItem("nr_saves",JSON.stringify(saves))}catch(e){toast("Couldn't save the list of saves")}
+  try{if(db)await db.doc("league/_saves").set({list:saves});else await lset("nr_saves",saves)}catch(e){toast("Couldn't save the list of saves")}
 }
 function rebuild(){
   Object.keys(docs).forEach(k=>delete docs[k]);Object.keys(lastJson).forEach(k=>delete lastJson[k]);pending.clear();
   raw.forEach((data,sid)=>{const [sl,id]=parseSid(sid);if(sl===slot){docs[id]=JSON.parse(JSON.stringify(data));lastJson[id]=canon(data)}});
+  setTimeout(migratePhotos,0);
 }
 function resetSeriesList(){SERIES=DEFK.map(k=>[k,DEFN[k]])}
 function seedDocs(year){resetSeriesList();SERIES.forEach(([k])=>{const id=docId(k,year);docs[id]=newDoc(k,year);touch(id)})}
@@ -420,11 +458,31 @@ function doSwitch(id,year){
 }
 async function removeDoc(id){delete docs[id];delete lastJson[id];pending.delete(id);await deleteStored(id)}
 function whenSaved(cb,n=0){if(!pending.size&&!writing)cb();else if(n<25)setTimeout(()=>whenSaved(cb,n+1),400)}
-function loadLocal(){
-  try{const l=JSON.parse(localStorage.getItem("nr_saves")||"null");if(Array.isArray(l)&&l.length)saves=l}catch(e){}
-  try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith("nr_doc_")){raw.set(k.slice(7),JSON.parse(localStorage.getItem(k)))}}}catch(e){}
+async function loadLocal(){
+  let m=new Map(),migrated=false;
+  const old=new Map();
+  try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&LS_KEYS(k)){try{old.set(k,JSON.parse(localStorage.getItem(k)))}catch(e){}}}}catch(e){}
+  try{
+    idb=await idbOpen();
+    const all=await idbAll();
+    if(all.has("nr_migrated"))m=all;
+    else if(!old.size){await idbTx("readwrite",st=>{st.put(Date.now(),"nr_migrated")});m=new Map()}
+    else{
+      await askMigrate(old);
+      await idbTx("readwrite",st=>{old.forEach((v,k)=>{st.put(v,k)})});
+      const back=await idbAll();let ok=true;old.forEach((v,k)=>{if(!back.has(k)||JSON.stringify(back.get(k))!==JSON.stringify(v))ok=false});
+      if(!ok)throw new Error("verify");
+      await idbTx("readwrite",st=>{st.put(Date.now(),"nr_migrated")});
+      m=old;migrated=true;
+    }
+    try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+    stoRefresh();
+  }catch(e){idb=null;m=old}
+  const l=m.get("nr_saves");if(Array.isArray(l)&&l.length)saves=l;
+  m.forEach((v,k)=>{if(k.startsWith("nr_doc_"))raw.set(k.slice(7),v);else if(k.startsWith("nr_ph_")&&v&&v.k&&v.v){PH.set(v.k,v.v);PHID.set(k.slice(6),v.k)}});
   if(!saves.some(x=>x.id===slot))slot=saves[0].id;
   rebuild();
+  if(migrated)setTimeout(()=>toast("Your saves now use larger browser storage. The old copy is kept too."),600);
 }
 function cleanTracks(){Object.keys(docs).forEach(id=>{const d=docs[id];let ch=false;(d.races||[]).forEach(r=>{const m=String(r.track||"").match(/^[OoRr]\s+(\S.*)$/);if(m&&/^[A-Z]/.test(m[1])){r.track=m[1];ch=true}});if(ch)touch(id)})}
 function firstRun(){cleanTracks();
@@ -453,8 +511,9 @@ function onSnap(snap){
 async function boot(){
   render();
   try{if(window.claude&&claude.use){db=await claude.use("db");dl=await claude.use("downloads")}}catch(e){db=null}
-  if(db){db.collection("league").onSnapshot(onSnap,e=>{toast("Storage error: "+e.code)})}
-  else{loadLocal();ready=true;firstRun();setSave("Saved on this device");render()}
+  if(db){db.collection("league").onSnapshot(onSnap,e=>{toast("Storage error: "+e.code)});
+    try{db.collection("photos").onSnapshot(snap=>{let ch=false;snap.docChanges().forEach(c=>{const id=c.doc.id;if(c.type==="removed"){const k=PHID.get(id);if(k){PH.delete(k);PHID.delete(id);ch=true}return}const o=c.doc.data();if(o&&o.k&&o.v){PH.set(o.k,o.v);PHID.set(id,o.k);ch=true}});if(ch)render()},()=>{})}catch(e){}}
+  else{await loadLocal();ready=true;firstRun();setSave("Saved on this device");render()}
 }
 
 /* ---------- calculations ---------- */
@@ -490,13 +549,13 @@ function agg(list,keyFn,raw){
     const dm=new Map(d.drivers.map(x=>[x.id,x]));
     const get=dr=>{
       const key=keyFn(d,dr);let s=m.get(key);
-      if(!s){s={key,pts:0,reg:0,post:0,regWins:0,starts:0,wins:0,t5:0,t10:0,t20:0,poles:0,led:0,dnf:0,sf:0,ss:0,best:99,laps:0,stw:0,stp:0,pp:0,dp:0};Object.assign(s,{id:dr.id,name:dr.name,nat:dr.nat,photo:dr.photo,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf,rookie:dr.rookie});m.set(key,s)}
+      if(!s){s={key,pts:0,reg:0,post:0,regWins:0,starts:0,wins:0,t5:0,t10:0,t20:0,poles:0,led:0,dnf:0,sf:0,ss:0,best:99,laps:0,stw:0,stp:0,pp:0,dp:0};Object.assign(s,{id:dr.id,name:dr.name,nat:dr.nat,photo:photoOf(dr.name),num:dr.num,team:dr.team,make:dr.make,pf:dr.pf,rookie:dr.rookie});m.set(key,s)}
       return s;
     };
     const prim=new Map(),als=new Map();d.drivers.forEach(x=>{const k=String(x.name||"").trim().toLowerCase();if(!k)return;if(!prim.has(k))prim.set(k,x);else if(!raw)als.set(x.id,prim.get(k))});
     const effc=new Map();
     const eff=id=>{const x=dm.get(id);if(!x)return null;const pr=als.get(id);if(!pr)return x;let e=effc.get(id);if(!e){e=Object.assign({},x,{id:pr.id,name:pr.name,pf:pr.pf||x.pf,rookie:pr.rookie||x.rookie});effc.set(id,e)}return e};
-    d.drivers.forEach(dr=>{const pr=als.get(dr.id);if(pr){const e=eff(dr.id),s=get(e),ks=keyFn(d,e);if(ks===e.id||ks===String(e.name).trim().toLowerCase()){(s._w||(s._w={n:[],t:[],i:[]})).n.push(String(dr.num==null?"":dr.num).trim());s._w.t.push(dr.team||"");s._w.i.push(dr.id)}return}const s=get(dr);Object.assign(s,{id:dr.id,name:dr.name,nat:dr.nat,photo:dr.photo,num:dr.num,team:dr.team,make:dr.make,pf:dr.pf||[...als].some(([a,b])=>b===dr&&(dm.get(a)||{}).pf),rookie:dr.rookie});const ks=keyFn(d,dr);if(als.size&&(ks===dr.id||ks===String(dr.name).trim().toLowerCase())){const w=s._w||(s._w={n:[],t:[],i:[]});w.n.push(String(dr.num==null?"":dr.num).trim());w.t.push(dr.team||"");w.i.push(dr.id)}});
+    d.drivers.forEach(dr=>{const pr=als.get(dr.id);if(pr){const e=eff(dr.id),s=get(e),ks=keyFn(d,e);if(ks===e.id||ks===String(e.name).trim().toLowerCase()){(s._w||(s._w={n:[],t:[],i:[]})).n.push(String(dr.num==null?"":dr.num).trim());s._w.t.push(dr.team||"");s._w.i.push(dr.id)}return}const s=get(dr);Object.assign(s,{id:dr.id,name:dr.name,nat:dr.nat,photo:photoOf(dr.name),num:dr.num,team:dr.team,make:dr.make,pf:dr.pf||[...als].some(([a,b])=>b===dr&&(dm.get(a)||{}).pf),rookie:dr.rookie});const ks=keyFn(d,dr);if(als.size&&(ks===dr.id||ks===String(dr.name).trim().toLowerCase())){const w=s._w||(s._w={n:[],t:[],i:[]});w.n.push(String(dr.num==null?"":dr.num).trim());w.t.push(dr.team||"");w.i.push(dr.id)}});
     const dpo=duelPts(d);
     if(dpo.on)(d.exh||[]).forEach(ev=>{if(ev.kind!=="Duel"||!ev.done)return;(ev.res||[]).forEach(x=>{const dr0=dm.get(x.d),v=dpo.pts[x.f-1]||0;if(!dr0||!v)return;const s0=get(dr0);s0.pts+=v;s0.dp+=v;if(after)s0.reg+=v})});
     d.races.forEach((r,i)=>{
@@ -1230,7 +1289,7 @@ function modalPhotos(){
   <footer><span class="small muted">A photo applies to the driver in every series and season.</span><span class="sp"></span><button class="btn pri" data-act="photoApply" ${n?"":"disabled"}>Apply ${n}</button></footer></div>`}
 async function photoRun(m){
   const names=new Map();
-  Object.values(docs).forEach(dd=>{if(dd&&dd.drivers)dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(!key)return;const o=names.get(key);if(!o)names.set(key,{name:x.name.trim(),cur:x.photo||""});else if(!o.cur&&x.photo)o.cur=x.photo})});
+  Object.values(docs).forEach(dd=>{if(dd&&dd.drivers)dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(!key)return;const o=names.get(key);if(!o)names.set(key,{name:x.name.trim(),cur:photoOf(x.name)})})});
   const list=[...names.values()];m.total=list.length;m.done=0;m.status="running";m.rows=[];m.miss=[];m.errs=[];renderModal();
   let q=0,fail=0;
   const work=async()=>{while(q<list.length&&ui.modal===m){const it=list[q++];
@@ -1241,8 +1300,8 @@ async function photoRun(m){
   if(ui.modal!==m)return;
   m.rows.sort((a,b)=>a.name.localeCompare(b.name));m.status="done";renderModal();
 }
-function picFit(src){return new Promise((ok,no)=>{const im=new Image();im.onload=()=>{const S=240,c=document.createElement("canvas");c.width=c.height=S;const x=c.getContext("2d"),w=im.naturalWidth,h=im.naturalHeight,sq=Math.min(w,h),sx=(w-sq)/2,sy=h>w?(h-sq)*0.12:(h-sq)/2;x.fillStyle="#222";x.fillRect(0,0,S,S);x.drawImage(im,sx,sy,sq,sq,0,0,S,S);try{ok(c.toDataURL("image/jpeg",.8))}catch(e){no(e)}};im.onerror=()=>no(new Error("bad image"));im.src=src})}
-function setPhoto(dr,v){const k=dr.name.trim().toLowerCase();Object.keys(docs).forEach(did=>{const dd=docs[did];if(!dd||!dd.drivers)return;let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===k&&(z.photo||"")!==(v||"")){if(v)z.photo=v;else delete z.photo;ch=true}});if(ch)touch(did)})}
+function picFit(src){return new Promise((ok,no)=>{const im=new Image();im.onload=()=>{const S=240,c=document.createElement("canvas");c.width=c.height=S;const x=c.getContext("2d"),w=im.naturalWidth,h=im.naturalHeight,sq=Math.min(w,h),sx=(w-sq)/2,sy=h>w?(h-sq)*0.12:(h-sq)/2;x.fillStyle="#222";x.fillRect(0,0,S,S);x.drawImage(im,sx,sy,sq,sq,0,0,S,S);try{ok(c.toDataURL("image/jpeg",.78))}catch(e){no(e)}};im.onerror=()=>no(new Error("bad image"));im.src=src})}
+function setPhoto(dr,v){return phSave(dr.name,v)}
 async function photoFind(name,full){
   const r=await wdLookup(name,false);if(!r)throw new Error("nodriver");
   let u="";
@@ -1512,13 +1571,13 @@ function vDrivers(d0){
   const f=ui.filter.toLowerCase(),by=new Map(),Y=ui.year;
   Object.values(docs).filter(x=>x&&x.series).sort((a,b)=>a.year-b.year).forEach(dd=>{
     dd.drivers.forEach(x=>{const key=x.name.trim().toLowerCase();if(!key)return;let e=by.get(key);if(!e){e={name:x.name,retired:false,yrs:new Map()};by.set(key,e)}
-      if(x.retired)e.retired=true;if(x.photo&&!e.photo)e.photo=x.photo;if(x.hometown&&!e.home)e.home=x.hometown;
+      if(x.retired)e.retired=true;if(x.hometown&&!e.home)e.home=x.hometown;
       if(!e.yrs.has(dd.year))e.yrs.set(dd.year,[]);
       e.yrs.get(dd.year).push({s:dd.series,sn:dd.name||dd.series,id:x.id,num:x.num,team:x.team,age:x.age,year:dd.year});if(x.nat&&!e.nat)e.nat=x.nat})});
   const people=[...by.values()].map(e=>{
     const ys=[...e.yrs.keys()].sort((a,b)=>a-b),show=e.yrs.has(Y)?Y:(ys.filter(y=>y<Y).pop()||ys[0]),ent=e.yrs.get(show);
     const age=(ent.find(z=>z.age!==""&&z.age!=null)||{}).age;
-    return {name:e.name,photo:e.photo||"",home:e.home||"",nat:e.nat||"",age:age==null?"":age,ent,year:show,status:e.retired?"Retired":e.yrs.has(Y)?"Active":"Inactive"}});
+    return {name:e.name,photo:photoOf(e.name),home:e.home||"",nat:e.nat||"",age:age==null?"":age,ent,year:show,status:e.retired?"Retired":e.yrs.has(Y)?"Active":"Inactive"}});
   const cnt={all:people.length,Active:0,Inactive:0,Retired:0};people.forEach(x=>cnt[x.status]++);
   const flt=ui.drvFilter||"all";
   let list=people.filter(e=>(flt==="all"||e.status===flt)&&(!f||(e.name+" "+e.nat+" "+(e.home||"")+" "+e.status+" "+e.ent.map(z=>z.num+" "+z.team+" "+z.sn).join(" ")).toLowerCase().includes(f)));
@@ -1623,7 +1682,7 @@ const lastBackup=()=>{try{return +localStorage.getItem("nr_lastbackup")||0}catch
 const agoText=t=>{if(!t)return "never";const days=Math.floor((Date.now()-t)/864e5);return days<1?"today":days===1?"yesterday":days+" days ago"};
 function backupAll(){
   whenSaved(async()=>{
-    const out={format:"nr2003-tracker-backup",version:2,made:new Date().toISOString(),saves:[]};
+    const out={format:"nr2003-tracker-backup",version:2,made:new Date().toISOString(),saves:[],photos:[...PH].map(([k,v])=>({k,v}))};
     saves.forEach(sv=>{const dcs={};raw.forEach((data,sid)=>{const [sl,id]=parseSid(sid);if(sl===sv.id)dcs[id]=data});if(sv.id===slot)Object.keys(docs).forEach(k=>{dcs[k]=docs[k]});out.saves.push({id:sv.id,name:sv.name,docs:dcs})});
     const n=out.saves.reduce((a,x)=>a+Object.keys(x.docs).length,0);
     if(!n){toast("Nothing to back up yet");return}
@@ -1647,6 +1706,7 @@ function restoreBackup(){
         for(const k of Object.keys(sv.docs))await putStored(sidOf(id,k),sv.docs[k]);
         saves.push({id,name:taken?(sv.name||"Save")+" (restored)":(sv.name||"Restored save")});n++;
       }
+      if(Array.isArray(o.photos))for(const q of o.photos){if(q&&q.k&&q.v&&!PH.has(q.k))await phSave(q.k,q.v)}
       if(!n)throw 0;
       await writeSaves();renderModal();render();toast(n+" save"+(n===1?"":"s")+" restored. Open "+(n===1?"it":"them")+" from the list.");
     }catch(e){toast("That doesn't look like a backup from this tracker")}
@@ -1683,6 +1743,7 @@ function modalSaves(){
     <div class="sect"><h3 style="font-size:17px">Back up your saves</h3>
       <div class="small muted">A backup is a file with every save in it. Keep it somewhere safe, like cloud storage. Last backup: <b>${agoText(lastBackup())}</b>.</div>
       <div class="row"><button class="btn pri" data-act="backupAll">Download backup of all saves</button><button class="btn" data-act="restoreBackup">Restore from a backup file</button></div>
+      ${stoLine()}
       <div class="small muted">Restoring adds the saves in the file as new saves. It never overwrites what you have.</div></div>
     <div class="sect"><h3 style="font-size:17px">Clear all changes</h3>
       <div class="small muted">Erases everything in "${esc(slotName())}" (drivers, schedules, results and ratings) and restores the defaults for the starting year above. Other saves are not touched. Download a backup from Setup first if you might want it back.</div>
@@ -2572,11 +2633,11 @@ function modalDriver(){
   const serOpts=[...new Map(allD.map(dd=>[dd.series,dd.name])).entries()];
   const yrs=sDocs.map(dd=>{const dxA=dd.drivers.filter(same),dx=dxA[0],dxs=dx?act(dd,dxA):[];if(!dx)return "";const z=agg([dd],(a,b)=>b.id).get(dx.id);
     const ar=avgRate(dx,"d"),sr=standings(dd).rows.filter(r=>r.pf!==false),ix=dxs.every(q=>q.pf===false)?-1:sr.findIndex(r=>r.id===dx.id),pos=ix>=0&&z.starts>0?ix+1:null,mk=dd.series+"|"+dd.year,col=!!(m0.cl&&m0.cl[mk]),multi=dxs.length>1;return `<tr ${multi?`class="tog" style="cursor:pointer" data-act="carsTog" data-k="${mk}" title="Click to ${col?"show":"hide"} each car"`:""}><td>${multi?(col?"▸ ":"▾ "):""}${dd.year}</td>${multiH?`<td>${esc(dd.name)}</td>`:""}<td class="n">${joinU(dxs.map(q=>q.num)).map(v=>`<span class="car">${esc(v)}</span>`).join(" ")||'<span class="car"></span>'}</td><td class="n">${(dxs.find(q=>q.age!==""&&q.age!=null)||{}).age??"–"}</td><td>${esc(joinU(dxs.map(q=>q.team)).join(" / "))}</td><td class="n">${pos?"<b>"+pos+"</b>":"–"}</td><td class="n">${z.starts}</td><td class="n">${z.wins}</td><td class="n">${z.poles}</td><td class="n">${z.t5}</td><td class="n">${z.t10}</td><td class="n">${z.led}</td><td class="n">${z.avgF!=null?fmt(z.avgF):"–"}</td><td class="n">${z.pts}</td><td class="n">${ar==null?"–":f1(ar)}</td></tr>`+(multi&&!col?(()=>{const rm=agg([dd],(q,w)=>w.id,true);return dxs.map(q=>{const y=rm.get(q.id);if(!y)return "";const qr=avgRate(q,"d");return `<tr class="sub muted"><td></td>${multiH?"<td></td>":""}<td class="n"><span class="car">${esc(q.num)}</span></td><td></td><td>↳ ${esc(q.team||"")}</td><td class="n">–</td><td class="n">${y.starts}</td><td class="n">${y.wins}</td><td class="n">${y.poles}</td><td class="n">${y.t5}</td><td class="n">${y.t10}</td><td class="n">${y.led}</td><td class="n">${y.avgF!=null?fmt(y.avgF):"–"}</td><td class="n">${y.pts}</td><td class="n">${qr==null?"–":f1(qr)}</td></tr>`}).join("")})():"")}).join("");
-  return `<div class="dlg" role="dialog" aria-label="Driver card" data-s="${ui.series}"><header>${dr.photo?`<img class="pic lg" src="${dr.photo}" alt="">`:""}<span class="car" style="font-size:22px">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.num)).join("/")||dr.num)}</span><h3>${esc(dr.name)}</h3><span class="muted">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.team)).join(" / "))} ${joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).length?"· "+esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).join(" / ")):""}</span>${dr.nat?natLink(dr.nat):""}<span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  return `<div class="dlg" role="dialog" aria-label="Driver card" data-s="${ui.series}"><header>${photoOf(dr.name)?`<img class="pic lg" src="${photoOf(dr.name)}" alt="">`:""}<span class="car" style="font-size:22px">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.num)).join("/")||dr.num)}</span><h3>${esc(dr.name)}</h3><span class="muted">${esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.team)).join(" / "))} ${joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).length?"· "+esc(joinU(act(d,d.drivers.filter(same)).map(q=>q.make)).join(" / ")):""}</span>${dr.nat?natLink(dr.nat):""}<span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body"><div class="row" style="gap:12px;margin-bottom:12px"><label class="fld">Series<select data-tf="sf"><option value="all">All series</option>${serOpts.map(([k,n])=>`<option value="${k}" ${sf===k?"selected":""}>${esc(n)}</option>`).join("")}</select></label>
     <label class="fld">Season<select data-tf="yf"><option value="all" ${yf==="all"?"selected":""}>All seasons</option>${yrsL.map(y=>`<option value="${y}" ${yf===y?"selected":""}>${y}</option>`).join("")}</select></label></div>
   <div class="grid2"><div><h3>Driver ratings <span class="muted" style="font-size:15px">avg ${avgRate(dr,"d")==null?"–":f1(avgRate(dr,"d"))}</span></h3>${RATE.filter(r=>r[2]==="d").map(([c,n])=>{const v=rg(dr,c);return `<div class="rt"><span>${n}</span><i><b style="margin-left:${v?v.a:0}%;width:${v?Math.max(v.b-v.a,1):0}%"></b></i><span class="n">${rtxt(v)}</span></div>`}).join("")}</div>
-  <div><h3>${esc(scope)}</h3><dl class="kv" style="margin-top:6px"><dt>Retired</dt><dd><label class="row" style="gap:6px"><input type="checkbox" class="chk" data-ed="drv" data-id="${dr.id}" data-k="retired" ${dr.retired?"checked":""}> <span class="small muted">No longer racing</span></label></dd><dt>Age</dt><dd><input type="number" class="w-s" min="0" max="120" data-ed="drv" data-id="${dr.id}" data-k="age" value="${esc(dr.age==null?"":dr.age)}" aria-label="Age" placeholder="–"></dd><dt>Photo</dt><dd><div class="row" style="gap:10px;align-items:flex-end">${dr.photo?`<img class="pic xl" src="${dr.photo}" alt="">`:""}<label class="btn sm" style="cursor:pointer">Upload<input type="file" accept="image/*" data-photo="up" hidden></label><button class="btn sm" data-act="photoFind" ${ui.modal.picBusy?"disabled":""}>${ui.modal.picBusy?"Searching…":"Find on Wikipedia"}</button>${dr.photo?`<button class="btn sm" data-act="photoDel">Remove</button>`:""}</div>${ui.modal.picMsg?`<div class="small muted">${esc(ui.modal.picMsg)}</div>`:""}<div class="small muted">Saved small on this device&#39;s copy of your league. Wikipedia photos come from Wikimedia Commons, so check each image&#39;s license before sharing.</div></dd><dt>Nationality</dt><dd><input type="text" list="natList" class="w-l" data-ed="drv" data-id="${dr.id}" data-k="nat" value="${esc(dr.nat||"")}" aria-label="Nationality" placeholder="–"> <span class="natflag">${flagHtml(dr.nat)}</span><datalist id="natList">${Object.keys(NATS).map(c=>`<option value="${c}">`).join("")}</datalist></dd><dt>Hometown</dt><dd><input type="text" class="w-l" data-ed="drv" data-id="${dr.id}" data-k="hometown" value="${esc(dr.hometown||"")}" aria-label="Hometown" placeholder="City, State"></dd>${ents.length===1?`<dt>Points</dt><dd><b>${s.pts}</b></dd>`:""}<dt>Starts</dt><dd>${s.starts}</dd><dt>Crown jewels</dt><dd>${(()=>{const ids=new Set(ents.flatMap(e=>e.dxs.map(q=>q.id)));const w=crownRaces(sel).filter(z=>z.dv&&ids.has(z.dv.id));return w.length?`<b>${w.length}</b> <span class="small muted">${w.map(z=>`<span class="gem">◆</span> ${z.dd.year} ${esc(z.r.name||z.r.track)}`).join(" · ")}</span>`:"0"})()}</dd><dt>Wins / Poles</dt><dd>${s.wins} / ${s.poles}</dd><dt>Top 5 / Top 10</dt><dd>${s.t5} / ${s.t10}</dd><dt>Laps led</dt><dd>${s.led}</dd><dt>Laps completed</dt><dd>${s.laps}</dd><dt>Avg start / finish</dt><dd>${s.avgS!=null?fmt(s.avgS):"–"} / ${s.avgF!=null?fmt(s.avgF):"–"}</dd><dt>DNFs</dt><dd>${s.dnf}</dd></dl></div></div>
+  <div><h3>${esc(scope)}</h3><dl class="kv" style="margin-top:6px"><dt>Retired</dt><dd><label class="row" style="gap:6px"><input type="checkbox" class="chk" data-ed="drv" data-id="${dr.id}" data-k="retired" ${dr.retired?"checked":""}> <span class="small muted">No longer racing</span></label></dd><dt>Age</dt><dd><input type="number" class="w-s" min="0" max="120" data-ed="drv" data-id="${dr.id}" data-k="age" value="${esc(dr.age==null?"":dr.age)}" aria-label="Age" placeholder="–"></dd><dt>Photo</dt><dd><div class="row" style="gap:10px;align-items:flex-end">${photoOf(dr.name)?`<img class="pic xl" src="${photoOf(dr.name)}" alt="">`:""}<label class="btn sm" style="cursor:pointer">Upload<input type="file" accept="image/*" data-photo="up" hidden></label><button class="btn sm" data-act="photoFind" ${ui.modal.picBusy?"disabled":""}>${ui.modal.picBusy?"Searching…":"Find on Wikipedia"}</button>${photoOf(dr.name)?`<button class="btn sm" data-act="photoDel">Remove</button>`:""}</div>${ui.modal.picMsg?`<div class="small muted">${esc(ui.modal.picMsg)}</div>`:""}<div class="small muted">Saved small on this device&#39;s copy of your league. Wikipedia photos come from Wikimedia Commons, so check each image&#39;s license before sharing.</div></dd><dt>Nationality</dt><dd><input type="text" list="natList" class="w-l" data-ed="drv" data-id="${dr.id}" data-k="nat" value="${esc(dr.nat||"")}" aria-label="Nationality" placeholder="–"> <span class="natflag">${flagHtml(dr.nat)}</span><datalist id="natList">${Object.keys(NATS).map(c=>`<option value="${c}">`).join("")}</datalist></dd><dt>Hometown</dt><dd><input type="text" class="w-l" data-ed="drv" data-id="${dr.id}" data-k="hometown" value="${esc(dr.hometown||"")}" aria-label="Hometown" placeholder="City, State"></dd>${ents.length===1?`<dt>Points</dt><dd><b>${s.pts}</b></dd>`:""}<dt>Starts</dt><dd>${s.starts}</dd><dt>Crown jewels</dt><dd>${(()=>{const ids=new Set(ents.flatMap(e=>e.dxs.map(q=>q.id)));const w=crownRaces(sel).filter(z=>z.dv&&ids.has(z.dv.id));return w.length?`<b>${w.length}</b> <span class="small muted">${w.map(z=>`<span class="gem">◆</span> ${z.dd.year} ${esc(z.r.name||z.r.track)}`).join(" · ")}</span>`:"0"})()}</dd><dt>Wins / Poles</dt><dd>${s.wins} / ${s.poles}</dd><dt>Top 5 / Top 10</dt><dd>${s.t5} / ${s.t10}</dd><dt>Laps led</dt><dd>${s.led}</dd><dt>Laps completed</dt><dd>${s.laps}</dd><dt>Avg start / finish</dt><dd>${s.avgS!=null?fmt(s.avgS):"–"} / ${s.avgF!=null?fmt(s.avgF):"–"}</dd><dt>DNFs</dt><dd>${s.dnf}</dd></dl></div></div>
   <h3 style="margin-top:16px">By season</h3><div class="tw"><table><thead><tr><th>Year</th>${multiH?"<th>Series</th>":""}<th class=n>#</th><th class=n>Age</th><th>Team</th><th class=n title="Final points position, for drivers running for points">Pos</th><th class=n>Starts</th><th class=n>Wins</th><th class=n>Poles</th><th class=n>T5</th><th class=n>T10</th><th class=n>Led</th><th class=n>Avg fin</th><th class=n>Pts</th><th class=n>Avg rating</th></tr></thead><tbody>${yrs}</tbody></table></div>
   ${(()=>{const xs=(d.exh||[]).map(ev=>{const x=(ev.res||[]).find(z=>z.d===dr.id);return x&&!ui.logCrown&&(!ui.logWins||x.f===1)?`<tr><td><a href="#" data-act="exrace" data-id="${ev.id}" data-from="${dr.id}">${esc(ev.name)||"Event"}</a></td><td>${esc(ev.kind||"")}</td><td class="n">${x.s||"–"}</td><td class="n"><b>${x.f}</b></td><td class="n">${x.l||""}</td><td>${esc(x.x||"")}</td></tr>`:""}).join("");return xs?`<h3 style="margin-top:16px">${d.year} exhibitions</h3><div class="tw"><table><thead><tr><th>Event</th><th>Type</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th></tr></thead><tbody>${xs}</tbody></table></div>`:""})()}
   <div class="row" style="margin-top:16px"><h3>${yf==="all"?"Race log":yf+" race log"}</h3><span class="sp"></span>${logSeg()}</div>${log?`<div class="tw"><table><thead><tr>${lyh}<th class=n>#</th><th>Race</th><th>Track</th><th class=n>Car</th><th>Team</th><th class=n>Start</th><th class=n>Fin</th><th class=n>Led</th><th>Status</th><th class=n title="Gap to the race leader">Interval</th><th class=n>Pts</th></tr></thead><tbody>${log}</tbody></table></div>`:'<p class="muted">'+(ui.logWins?"No wins for this selection.":"No results yet for this selection.")+'</p>'}</div></div>`;
@@ -3105,7 +3166,7 @@ const ACT={
   backupAll:()=>{backupAll();return "nr"},
   restoreBackup:()=>{restoreBackup();return "nr"},
   help:()=>{ui.modal={type:"help"};renderModal();return "nr"},
-  saves:()=>{ui.modal={type:"saves"};renderModal();return "nr"},
+  saves:()=>{ui.modal={type:"saves"};renderModal();stoRefresh();return "nr"},
   saveSwitch:b=>{const id=b.dataset.id;whenSaved(()=>doSwitch(id));return "nr"},
   saveNew:()=>{const name=($("#svName").value||"").trim()||"Save "+(saves.length+1),y=Math.round(num($("#svYear").value))||2026,id="s"+uid();
     saves.push({id,name});writeSaves();whenSaved(()=>{doSwitch(id,y);toast('"'+name+'" created')});return "nr"},
