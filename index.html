@@ -747,13 +747,13 @@ function vSchedule(d){
       <td><input type="text" class="w-l" data-ed="race" data-id="${r.id}" data-k="track" value="${esc(r.track)}" placeholder="Track"></td>
       <td><select data-ed="race" data-id="${r.id}" data-k="type"><option value=""></option>${TYPES.map(t=>`<option ${r.type===t?"selected":""}>${t}</option>`).join("")}</select></td>
       <td><input type="number" step="0.001" class="w-s" data-ed="race" data-id="${r.id}" data-k="len" value="${esc(r.len||"")}" placeholder="${esc(trackLen(r.track)||"mi")}"></td>
-      <td><input type="number" class="w-s" data-ed="race" data-id="${r.id}" data-k="laps" value="${esc(r.laps||"")}" placeholder="laps"></td>
+      <td><input type="number" class="w-s" data-ed="race" data-id="${r.id}" data-k="laps" value="${esc(r.laps||"")}" placeholder="laps"> <input type="number" step="any" class="w-s" data-ed="race" data-id="${r.id}" data-k="dur" value="${esc(r.dur||"")}" placeholder="min" title="Timed race: length in minutes (24 hours = 1440). The simulator works out the laps from the track's lap time. Leave blank for a lap-count race."></td>
       <td title="Crown jewel race"><input type="checkbox" class="chk" data-ed="race" data-id="${r.id}" data-k="crown" ${r.crown?"checked":""} aria-label="Crown jewel race"></td>
       <td style="white-space:nowrap"><button class="btn sm" data-act="mv" data-id="${r.id}" data-v="-1" aria-label="Move up">↑</button> <button class="btn sm" data-act="mv" data-id="${r.id}" data-v="1" aria-label="Move down">↓</button> <button class="btn sm danger" data-act="delrace" data-id="${r.id}" data-confirm="1">✕</button></td></tr>`;
     const w=r.done?winnerOf(d,r):null;
     return div+`<tr class="${r.done?"done":""} ${r.id===nextId?"next":""}" data-drop="race" data-key="${r.id}">${grip}<td class="n">${i+1}</td><td>${esc(fmtDate(r.date))}</td>
       <td class="name">${r.crown?'<span class="gem" title="Crown jewel race">◆</span> ':""}<b>${esc(r.name)||'<span class="muted">Unnamed race</span>'}</b></td><td>${trackCell(r.track)}</td>
-      <td>${esc(r.type)}${(r.len||trackLen(r.track))?` <span class="muted">${esc(r.len||trackLen(r.track))} mi</span>`:""}</td><td class="n">${r.laps?esc(r.laps):""}</td>
+      <td>${esc(r.type)}${(r.len||trackLen(r.track))?` <span class="muted">${esc(r.len||trackLen(r.track))} mi</span>`:""}</td><td class="n">${r.dur>0?`<span class="muted" title="Timed race">${fmtDur(r.dur)}</span> `:""}${r.laps?(r.dur>0?"~":"")+esc(r.laps):""}</td>
       <td>${w?carTag(w):""}</td><td>${r.done?carTag(poleOf(d,r)):""}</td>
       <td><button class="btn sm ${r.done?"":"pri"}" data-act="race" data-id="${r.id}">${r.done?"Results":"Enter results"}</button></td></tr>`;
   }).join("");
@@ -2434,8 +2434,9 @@ const WP_SER=[["cup","Cup Series",["NASCAR Cup Series","NASCAR Sprint Cup Series
  ["busch","O'Reilly Series",["NASCAR O'Reilly Auto Parts Series","NASCAR Xfinity Series","NASCAR Nationwide Series","NASCAR Busch Series","NASCAR Busch Grand National Series"]],
  ["truck","Truck Series",["NASCAR Craftsman Truck Series","NASCAR Camping World Truck Series","NASCAR Truck Series","NASCAR Gander RV & Outdoors Truck Series","NASCAR Gander RV & Outdoors Truck Series","NASCAR Gander Outdoors Truck Series","NASCAR Truck Series","NASCAR SuperTruck Series"]],
  ["indycar","IndyCar",["IndyCar Series","IRL IndyCar Series","Champ Car World Series season","Champ Car World Series","CART PPG World Series","PPG Indy Car World Series","CART season","Indy Car World Series","IndyCar Series season","Indy Racing League season","Indy Racing League","Indy Lights"]],
- ["f1","Formula 1",["Formula One World Championship","Formula One season"]]];
-const wpSkip=/all-star|all star|the winston|shootout|\bduels?\b|\bclash\b|busch clash|exhibition|\bpre-season\b|non-?championship|invitational|last chance|\bheat\b/i;
+ ["f1","Formula 1",["Formula One World Championship","Formula One season"]],
+ ["imsa","IMSA SportsCar",["IMSA SportsCar Championship","IMSA WeatherTech SportsCar Championship","WeatherTech SportsCar Championship","United SportsCar Championship","Rolex Sports Car Series","Grand-Am Rolex Sports Car Series","American Le Mans Series"]]];
+const wpSkip=/all-star|all star|the winston|shootout|\bduels?\b|\bclash\b|busch clash|exhibition|\bpre-season\b|non-?championship|invitational|last chance|\bheat\b|roar before/i;
 const MONS=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 function wpDate(t,y){
   t=String(t||"");let m=t.match(/(\d{4})-(\d\d)-(\d\d)/);if(m)return m[0];
@@ -2510,6 +2511,43 @@ function wpRoster(html){
       by.forEach(a=>{a.slice().sort((x,y)=>y.rc-x.rc).forEach((o,i)=>{o.pf=o.use=i<2&&o.rc>=3})})}});
   return out}
 
+function wpRosterImsa(html){
+  const doc=new DOMParser().parseFromString(html,"text/html"),raw=[],seen=new Set();let mx=0;
+  const clsNorm=t=>{t=String(t||"").replace(/\[.*?\]/g,"").replace(/\s+/g," ").trim();if(/^P$/.test(t))return "P";const m=t.match(/\b(GTP|LMP[123]|LMPC|LMP|GTD\s*Pro|GTD|GTLM|GTE|GTC|GX|DPi|DP|PC|GT)\b/i);return m?m[1].replace(/\s+/," ").replace(/^gtd pro$/i,"GTD Pro").replace(/^(gtp|lmp\d?|lmpc|gtd|gtlm|gte|gtc|gx|dpi|dp|pc|gt)$/i,x=>x.toUpperCase()).replace(/^DPI$/,"DPi"):""};
+  const MKS=/^(aston martin|mercedes-?amg|mercedes|porsche|bmw|cadillac|acura|ford|chevrolet|corvette|lamborghini|ferrari|lexus|mclaren|audi|oreca|ligier|dallara|riley|multimatic|coyote|lola|nissan|mazda|honda|lotus|dodge|pontiac|viper|saleen|panoz|toyota|matech|elan|norma|morgan|radical|wolf|genesis|alfa romeo|maserati|ginetta|ARX)/i;
+  const mkOf=x=>{x=String(x||"").replace(/\[.*?\]/g,"").replace(/\s+/g," ").trim();if(!x)return "";const m=x.match(MKS);if(!m)return x.split(" ")[0];let v=m[1];return /^mercedes/i.test(v)?"Mercedes":/^corvette$/i.test(v)?"Chevrolet":/^arx$/i.test(v)?"Acura":v.replace(/\b\w/g,c=>c.toUpperCase())};
+  doc.querySelectorAll("table.wikitable").forEach(tbl=>{
+    const g=wpGrid(tbl);if(g.length<3)return;
+    const hi=g.findIndex(r=>r&&r.some(x=>/^drivers?\b/i.test(String(x||"").trim())));if(hi<0||hi>2)return;
+    const h=g[hi].map(x=>String(x||"").toLowerCase().trim());
+    const di=h.findIndex(x=>/^drivers?\b/.test(x)),ni=h.findIndex(x=>/^(no\.?|#|number)/.test(x)),ti=h.findIndex(x=>/^(team|entrant|entry)/.test(x)),ci=h.findIndex(x=>/chassis|^car$|manufacturer|^make/.test(x)),ei=h.findIndex(x=>/^engine/.test(x)),ri=h.findIndex(x=>/^rounds?|^races?$/.test(x)),cli=h.findIndex(x=>/^class/.test(x));
+    if(di<0||ni<0||ti<0)return;
+    let sec="",el=tbl.previousElementSibling;for(let i=0;i<12&&el;i++,el=el.previousElementSibling){if(/^H[2-5]$/.test(el.tagName)||(el.classList&&el.classList.contains("mw-heading"))){sec=el.textContent;break}}
+    let cur=clsNorm(sec),lastT="",lastM="",lastN="";
+    for(let r=hi+1;r<g.length;r++){const row=g[r]||[],ne=row.filter(x=>String(x||"").trim());
+      if(ne.length>=3&&new Set(ne.map(x=>String(x).trim())).size===1){const c=clsNorm(ne[0]);if(c)cur=c;continue}
+      const cell=c=>c<0?"":String(row[c]||"").split("|")[0].replace(/\[.*?\]/g,"").replace(/\s+/g," ").trim();
+      const ds=String(row[di]||"").split("|").map(x=>x.trim()).filter(Boolean);if(!ds.length)continue;
+      let num=(cell(ni).match(/\d+/)||[""])[0],team=cell(ti).replace(/\s*\([^)]*\)?/g,"").trim(),make=mkOf(cell(ci)||"");
+      if(!make&&ei>=0&&!/^(gibson|judd|nissan)$/i.test(mkOf(cell(ei))))make=mkOf(cell(ei));
+      if(num)lastN=num;else num=lastN;if(team)lastT=team;else team=lastT;if(make)lastM=make;else make=lastM;
+      const rounds=cell(ri),cls=(cli>=0?clsNorm(cell(cli)):"")||cur;
+      (rounds.match(/\d+/g)||[]).forEach(v=>{if(+v<=40)mx=Math.max(mx,+v)});
+      const all=/^(all|full)/i.test(rounds);let rc=0;if(!all)rounds.split(/[,;&]/).forEach(z=>{const m=z.match(/(\d+)\s*[–-]\s*(\d+)/);if(m)rc+=Math.max(0,+m[2]-+m[1]+1);else if(/\d/.test(z))rc++});
+      ds.forEach(dn=>{const name=dn.replace(/\[.*?\]/g,"").replace(/\([^)]*\)?/g,"").replace(/^[A-Z]{3}\s+(?=[A-Z])/,"").replace(/\s*#\s*\d+/g,"").replace(/\s+/g," ").trim();
+        if(!name||/^(tba|tbd|to be announced|—|-)$/i.test(name))return;
+        const k=name.toLowerCase()+"|"+num+"|"+cls,ex=seen.has(k)&&raw.find(o=>o.key===k);
+        if(ex){if(all)ex.all=true;ex.rc=Math.max(ex.rc,rc);return}
+        const rec={key:k,name,num,team,make,cls,all,rc,rookie:false};seen.add(k);raw.push(rec)})}});
+  const M=mx||10;
+  raw.forEach(o=>{if(o.all)o.rc=M;o.pf=o.all||o.rc>=M*.7;o.use=o.pf;o.info="Class and car data read from the Wikipedia entry list. Rounds in the season: "+M});
+  return raw}
+function imsaGroup(raw,mode){
+  if(mode==="driver")return raw.map(o=>Object.assign({},o,{use:o.pf}));
+  const by=new Map();raw.forEach(o=>{const k=o.team+"|"+o.num+"|"+o.cls,a=by.get(k)||[];a.push(o);by.set(k,a)});
+  const out=[];by.forEach(a=>{const mxr=Math.max(...a.map(o=>o.rc)),ch=a.filter(o=>o.rc>=Math.max(1,mxr*.7)),f=a[0];
+    out.push({name:ch.map(o=>o.name).join(" / "),num:f.num,team:f.team,make:f.make,cls:f.cls,rc:mxr,pf:ch.some(o=>o.pf),use:ch.some(o=>o.pf),rookie:false,info:f.info+". "+(a.length-ch.length?(a.length-ch.length)+" part-time co-driver"+(a.length-ch.length===1?"":"s")+" left out of the car names (switch to One entry per driver to include them)":"")})});
+  return out}
 function wpStand(html){
   const doc=new DOMParser().parseFromString(html,"text/html");let best=null;
   doc.querySelectorAll("table.wikitable").forEach(tbl=>{
@@ -2589,15 +2627,17 @@ function wpParse(html,y,ser){
     const hi=g.findIndex(r=>r&&r.length>=3&&r.some(x=>/date/i.test(x||"")));if(hi<0||hi>2)continue;
     const h=g[hi].map(x=>String(x||"").toLowerCase());
     const find=(re,not)=>h.findIndex(x=>re.test(x)&&!(not&&not.test(x)));
-    const di=find(/date/),ni=find(/race|event|grand prix|name/,/pole|winner|fastest|report|laps led|no\.?$/),ti=find(/track|circuit|venue|speedway/),li=find(/^laps?$|laps/),mi=find(/distance|miles|mileage/),ci=find(/location|city/);
+    const di=find(/date/),ni=find(/race|event|grand prix|name/,/pole|winner|fastest|report|laps led|no\.?$/),ti=find(/track|circuit|venue|speedway/),li=find(/^laps?$|laps/),mi=find(ser==="imsa"?/distance|miles|mileage|length|duration/:/distance|miles|mileage/),ci=find(/location|city/);
     if(di<0||ni<0||(ti<0&&ci<0))continue;
     const rows=[];const seen=new Set(),rci=h.findIndex(x=>/^(rnd|round|rd|no\.?|#)$/.test(x.trim()));
     for(let r=hi+1;r<g.length;r++){const row=g[r]||[];const name=(row[ni]||"").trim(),date=wpDate(row[di],y);if(!name||!date||wpSkip.test(name))continue;if(rci>=0&&rci!==ni&&/^(nc|—|-|–|ex|exh|n\/a|non|\*)/i.test(String(row[rci]||"").trim()))continue;
       let track=wpTrack(ti>=0?row[ti]:"",ti>=0&&g.links[r]?g.links[r][ti]:"")||(ci>=0?wpTrack(row[ci],""):"");const k=date+name;if(seen.has(k))continue;seen.add(k);
-      let laps="",approx=false;
+      let laps="",approx=false,dur="";
       if(li>=0){const m=String(row[li]||"").match(/\d+/);if(m)laps=+m[0]}
       if(!laps&&mi>=0){const t=String(row[mi]||"");let m=t.match(/(\d+)\s*laps/i);if(m)laps=+m[1];else{m=t.match(/([\d.]+)\s*(?:mi|miles)/i);const len=trackLen(track);if(m&&len){laps=Math.round(+m[1]/len);approx=true}}}
-      rows.push({use:true,date,name,track,laps,approx,page:(g.hrefs[r]&&g.hrefs[r][ni])||""})}
+      if(!laps&&ser==="imsa"&&mi>=0){const t=String(row[mi]||"");let mn=0;const hh=t.match(/(\d+(?:\.\d+)?)\s*hours?/i),mm=t.match(/(\d+)\s*min/i);if(hh)mn+=+hh[1]*60;if(mm)mn+=+mm[1];dur=Math.round(mn)||"";
+        if(mn){const tk=/daytona/i.test(track)&&!/road/i.test(track)?track+" road course":track,lt=trackLap(cur(),{track:tk,type:"Road course"}).v;if(lt>0){laps=Math.max(1,Math.round(mn*60/(lt*1.12)));approx=true}}}
+      rows.push({use:true,date,name,track,laps,dur,approx,page:(g.hrefs[r]&&g.hrefs[r][ni])||""})}
     if(rows.length>=6&&(!best||rows.length>best.length))best=rows;
     if(best&&best.length>=6)break}
   return best||[]}
@@ -2609,7 +2649,7 @@ async function wpLookup(m){
     if(r&&r.error&&r.error.code&&r.error.code!=="missingtitle"&&r.error.code!=="invalidtitle")throw new Error(r.error.info||r.error.code);
     const h=r&&r.parse&&r.parse.text&&(r.parse.text["*"]||r.parse.text);if(h){pg=r;html=h;title=r.parse.title||c;break}}
   if(!html){
-    const KW={cup:/cup|winston|strictly/i,busch:/busch|xfinity|nationwide|o.reilly/i,truck:/truck/i,indycar:/indy|champ car|cart\b|irl\b/i,f1:/formula (one|1)/i},BAD=/\brace\b|\bprix\b|\bresults?\b|statistics|\bat\b|playoffs?|\bchase\b/i,kw=KW[m.s]||/./;
+    const KW={imsa:/imsa|sportscar|sports car|american le mans|grand.?am/i,cup:/cup|winston|strictly/i,busch:/busch|xfinity|nationwide|o.reilly/i,truck:/truck/i,indycar:/indy|champ car|cart\b|irl\b/i,f1:/formula (one|1)/i},BAD=/\brace\b|\bprix\b|\bresults?\b|statistics|\bat\b|playoffs?|\bchase\b/i,kw=KW[m.s]||/./;
     let hits=[];try{const sr=await j(base+"&action=query&list=search&srnamespace=0&srlimit=12&srprop=&srsearch="+encodeURIComponent(m.y+" "+ser[1]+" season"));hits=((sr.query&&sr.query.search)||[]).map(x=>x.title)}catch(e){}
     hits=hits.filter(t=>t.startsWith(m.y)&&kw.test(t)&&!BAD.test(t)&&!/Series (results|statistics)/i.test(t)).slice(0,3);
     for(const c of hits){try{const r=await j(base+"&action=parse&prop=text&disableeditsection=1&disabletoc=1&redirects=1&page="+encodeURIComponent(c));const h=r&&r.parse&&r.parse.text&&(r.parse.text["*"]||r.parse.text);if(h){html=h;title=r.parse.title||c;break}}catch(e){}}
@@ -2617,7 +2657,7 @@ async function wpLookup(m){
   if(!html)throw new Error("nopage");
   m.title=title;
   if(m.kind==="ratings"){const st=wpStand(html);if(!st)throw new Error("nostand");m.stand=st;const sc=wpParse(html,m.y,m.s);m.types=sc.length===st.ncols?sc.map(r=>RAT_TYPE[realType2(r.track,m.s)]||"spd"):null;ratCalc(m,cur());if(!m.rows.length)throw new Error("noratmatch");return}
-  m.rows=m.kind==="roster"?wpRoster(html):wpParse(html,m.y,m.s);if(!m.rows.length)throw new Error(m.kind==="roster"?"noroster":"notable");
+  m.rows=m.kind==="roster"?(m.s==="imsa"?(m.raw=wpRosterImsa(html),m.group=m.group||"car",imsaGroup(m.raw,m.group)):wpRoster(html)):wpParse(html,m.y,m.s);if(!m.rows.length)throw new Error(m.kind==="roster"?"noroster":"notable");
   if(m.kind!=="roster"&&m.rows.some(r=>!r.laps&&r.page)){m.lapsBusy=true;wpLaps(m,base,j).catch(()=>{}).then(()=>{m.lapsBusy=false;if(ui.modal===m)renderModal()})}}
 async function wpLaps(m,base,j){
   const need=m.rows.filter(r=>!r.laps&&r.page);if(!need.length)return;
@@ -2639,8 +2679,8 @@ const realType2=(tr,s)=>{if(s==="f1")return "Road course";if(s==="indycar")retur
 function modalRoster(){
   const m=ui.modal,ser=WP_SER.find(x=>x[0]===m.s),d=cur(),n=m.rows.filter(x=>x.use).length;
   const body=m.status==="run"?`<div class="empty">Looking up the ${m.y} ${esc(ser[1])} teams and drivers on Wikipedia…</div>`:m.status==="err"?`<div class="empty">${esc(m.msg)}</div>`:
-   `<div class="small"><b>${m.rows.length}</b> drivers found · <b>${m.rows.filter(x=>x.pf).length}</b> full-time · <b>${new Set(m.rows.filter(x=>x.num).map(x=>x.num)).size}</b> different car numbers · <b>${n}</b> ticked to add (${new Set(m.rows.filter(x=>x.use&&x.num).map(x=>x.num)).size} car numbers)</div><div class="row" style="gap:8px"><button class="btn sm" data-act="rrAll" data-v="all">Tick all</button><button class="btn sm" data-act="rrAll" data-v="ft">Full-time only</button><button class="btn sm" data-act="rrAll" data-v="none">Tick none</button></div>
-   <div class="card tw" style="max-height:420px;overflow:auto"><table><thead><tr><th></th><th>#</th><th>Driver</th><th>Team</th><th>Make</th><th>Full-time</th></tr></thead><tbody>${m.rows.map((r,i)=>`<tr><td><input type="checkbox" class="chk" data-rr="${i}" ${r.use?"checked":""}></td><td>${esc(r.num)}</td><td>${esc(r.name)}${r.rookie?' <span class="muted small">(R)</span>':""}</td><td>${esc(r.team)}</td><td>${esc(r.make)}</td><td>${r.pf?"Yes":""}</td></tr>`).join("")}</tbody></table></div>
+   `<div class="small"><b>${m.rows.length}</b> drivers found · <b>${m.rows.filter(x=>x.pf).length}</b> full-time · <b>${new Set(m.rows.filter(x=>x.num).map(x=>x.num)).size}</b> different car numbers · <b>${n}</b> ticked to add (${new Set(m.rows.filter(x=>x.use&&x.num).map(x=>x.num)).size} car numbers)</div><div class="row" style="gap:8px"><button class="btn sm" data-act="rrAll" data-v="all">Tick all</button><button class="btn sm" data-act="rrAll" data-v="ft">Full-time only</button><button class="btn sm" data-act="rrAll" data-v="none">Tick none</button>${m.raw?`<span class="muted small">Cars with several drivers:</span><button class="btn sm ${m.group==="car"?"pri":""}" data-act="rrGrp" data-v="car">One entry per car</button><button class="btn sm ${m.group==="driver"?"pri":""}" data-act="rrGrp" data-v="driver">One entry per driver</button>`:""}</div>
+   <div class="card tw" style="max-height:420px;overflow:auto"><table><thead><tr><th></th><th>#</th><th>Driver</th><th>Team</th><th>Make</th>${m.rows.some(x=>x.cls)?"<th>Class</th>":""}<th>Full-time</th></tr></thead><tbody>${m.rows.map((r,i)=>`<tr><td><input type="checkbox" class="chk" data-rr="${i}" ${r.use?"checked":""}></td><td>${esc(r.num)}</td><td>${esc(r.name)}${r.rookie?' <span class="muted small">(R)</span>':""}</td><td>${esc(r.team)}</td><td>${esc(r.make)}</td>${m.rows.some(x=>x.cls)?`<td>${esc(r.cls||"")}</td>`:""}<td>${r.pf?"Yes":""}</td></tr>`).join("")}</tbody></table></div>
    <div class="small muted">From Wikipedia: ${esc(m.title)}. A driver who appears in more than one car is added once per car. Existing drivers with the same name and number are updated (team, make); new ones are added. Ratings are left alone.</div><div class="small muted">${esc((m.rows[0]||{}).info||"")}</div>`;
   return `<div class="dlg" role="dialog" aria-label="Look up roster" data-s="${ui.series}" style="max-width:860px"><header><h3>Look up ${m.y} ${esc(ser[1])} roster</h3><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body">${body}</div><footer><span class="sp"></span>${m.status==="done"?`<button class="btn pri" data-act="rrAdd" ${n?"":"disabled"}>Add ${n} drivers</button>`:""}</footer></div>`}
@@ -2673,6 +2713,8 @@ function modalRLook(){
 const TRACK_LENS=[[/roval/,2.28],[/mid.?ohio/,2.258],[/knoxville/,.5],[/lucas oil|irp|raceway park/,.686],[/lime rock/,1.53],[/portland/,1.967],[/st\.? petersburg/,1.8],[/coronado|naval base/,1.7],[/hermanos/,2.42],[/world wide tech|wwt/,1.25],[/daytona.*(road|rc)/,3.56],[/daytona/,2.5],[/talladega/,2.66],[/charlotte/,1.5],[/atlanta/,1.54],[/texas/,1.5],[/vegas/,1.5],[/kansas/,1.5],[/kentucky/,1.5],[/chicagoland|joliet/,1.5],[/homestead|miami/,1.5],[/michigan/,2],[/california|fontana|auto club/,2],[/pocono/,2.5],[/indianapolis.*road|indy road|brickyard road/,2.439],[/indianapolis|indy/,2.5],[/darlington/,1.366],[/dover/,1],[/phoenix/,1],[/richmond/,.75],[/bristol/,.533],[/martinsville/,.526],[/new hampshire|loudon/,1.058],[/iowa/,.875],[/gateway|st\.? louis|madison/,1.25],[/nashville/,1.333],[/milwaukee/,1],[/rockingham/,1.017],[/north wilkesboro|wilkesboro/,.625],[/sonoma|infineon|sears point/,1.99],[/watkins glen/,2.45],[/austin|cota|americas/,3.41],[/road america|elkhart/,4.048],[/chicago/,2.2],[/mosport|mont.?tremblant/,2.459],[/mexico/,2.42],[/bowman gray/,.25]];
 const trackLen=nm=>{const n=String(nm||"").toLowerCase(),h=n&&TRACK_LENS.find(([re])=>re.test(n));return h?h[1]:""};
 const TRACK_LAPS=[[/roval/,90],[/mid.?ohio/,90],[/knoxville/,20],[/auto club|california|fontana/,38],[/lucas oil|irp|raceway park/,22],[/lime rock/,55],[/portland/,75],[/st\.? petersburg/,75],[/coronado|naval base/,65],[/hermanos/,85],[/world wide tech|wwt/,32.5],[/daytona.*(road|rc)/,100],[/daytona/,48],[/talladega/,50.5],[/charlotte/,30.5],[/atlanta/,29.3],[/texas/,30],[/vegas/,30.5],[/kansas/,30.5],[/homestead|miami/,31.5],[/michigan/,40],[/pocono/,54],[/indianapolis.*road/,80],[/indianapolis|indy/,51.5],[/darlington/,30],[/dover/,23.5],[/phoenix/,27.8],[/richmond/,22.5],[/bristol/,16],[/martinsville/,20.5],[/new hampshire|loudon/,29.5],[/iowa/,21.5],[/gateway|st\.? louis|madison/,32.5],[/nashville/,31],[/milwaukee/,29.3],[/rockingham/,24.5],[/north wilkesboro|wilkesboro/,20.3],[/sonoma|infineon|sears point/,82],[/watkins glen/,73],[/austin|cota|americas/,140],[/road america|elkhart/,120],[/chicago/,90],[/mosport|mont.?tremblant/,85],[/bowman gray/,14]];
+const fmtDur=m=>{m=Math.round(num(m));if(!(m>0))return "";const h=Math.floor(m/60),mm=m%60;return h?h+"h"+(mm?" "+mm+"m":""):mm+"m"};
+const raceLaps=(d,r)=>{if(num(r.dur)>0){const lt=trackLap(d,r).v;if(lt>0)return Math.max(1,Math.round(num(r.dur)*60/(lt*1.12)))}return Math.round(num(r.laps))||0};
 const trackKey=r=>String((r&&(r.track||r.type))||"").trim().toLowerCase();
 function trackLap(d,r){
   const k=trackKey(r),mine=(d.lapTimes&&d.lapTimes[k])||Object.values(docs).map(x=>x&&x.lapTimes&&x.lapTimes[k]).find(Boolean);
@@ -2713,7 +2755,7 @@ function simQual(d,r,field){
 }
 const flTime=sec=>{if(!(sec>0))return "";const m=Math.floor(sec/60),x=sec-m*60;return m>0?m+":"+x.toFixed(3).padStart(6,"0"):x.toFixed(3)};
 function simRace(d,r,m){
-  const L=Math.max(10,Math.round(num(r.laps))||200),dnfR=Math.max(0,num(ui.sim.dnf))/100,fl=Math.round(num(ui.sim.field)),lim=fl>0?fl:Infinity;
+  const L=Math.max(10,raceLaps(d,r)||200),dnfR=Math.max(0,num(ui.sim.dnf))/100,fl=Math.round(num(ui.sim.field)),lim=fl>0?fl:Infinity;
   let q=(m.qrows||[]).filter(z=>z.d&&drvOf(d,z.d)).sort((a,b)=>(num(a.p)||999)-(num(b.p)||999)),made=false;
   const pool=simField(d,0);if(pool.length<2)return null;
   if(q.length<2){q=simQual(d,r,simField(d,Math.round(num(ui.sim.qatt))||0));made=true}
@@ -2759,19 +2801,21 @@ const simBox=(d,m,what)=>{const o=ui.sim,has=what==="race"?(m.rows||[]).length:(
 /* fastest lap choices: only drivers who are in this race's results table */
 function flOpts(d,m){const ids=new Set((m.rows||[]).filter(x=>x.d).map(x=>x.d));if(m.fl&&m.fl.d&&!ids.has(m.fl.d))m.fl.d="";
   return `<option value="">— choose —</option>`+[...d.drivers].filter(x=>ids.has(x.id)).sort((a,b)=>num(a.num)-num(b.num)).map(x=>`<option value="${x.id}" ${m.fl&&x.id===m.fl.d?"selected":""}>${esc(x.num)} · ${esc(x.name)}</option>`).join("")}
+const clsCellTxt=(d,rows,i)=>{const x=rows[i];if(!x||!x.d)return "";const dr=drvOf(d,x.d),c=dr&&dr.cls||"";if(!c)return "";const mp=clsPos(d,{res:rows.filter(z=>z.d)}).get(x.d);return esc(c)+(mp&&num(x.f)>0?` <span class="muted small">P${mp.f}</span>`:"")};
+const clsCellsRefresh=()=>{const m=ui.modal,d=cur();if(!m||m.type!=="race"||!clsOn(d))return;document.querySelectorAll("td[data-cc]").forEach(e=>{e.innerHTML=clsCellTxt(d,m.rows,+e.dataset.cc)})};
 function modalRace(){
   const d=cur(),r=mlist(d).find(x=>x.id===ui.modal.id),ex=!!ui.modal.exh;if(!r)return "";
   const rows=ui.modal.rows,am=ptsFor(d,rows,true),tab=ui.modal.tab||"res";
   const opts=sel=>`<option value="">— choose —</option>`+[...d.drivers].sort((a,b)=>num(a.num)-num(b.num)).map(x=>`<option value="${x.id}" ${x.id===sel?"selected":""}>${esc(x.num)} · ${esc(x.name)}</option>`).join("");
-  return `<div class="dlg" role="dialog" aria-label="Race results" data-s="${ui.series}"><header><h3>${esc(r.name||"Race")}</h3>${ex?`<span class="pill">${esc(r.kind||"Exhibition")} · no points</span>`:""}<span class="muted">${esc(r.track)} ${r.date?"· "+esc(fmtDate(r.date)):""}${r.cautions!=null&&r.cautions!==""?" · "+esc(r.cautions)+" cautions":""}${r.lc!=null&&r.lc!==""?" · "+esc(r.lc)+" lead changes":""}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
+  return `<div class="dlg" role="dialog" aria-label="Race results" data-s="${ui.series}"><header><h3>${esc(r.name||"Race")}</h3>${ex?`<span class="pill">${esc(r.kind||"Exhibition")} · no points</span>`:""}<span class="muted">${esc(r.track)} ${r.date?"· "+esc(fmtDate(r.date)):""}${r.dur>0?" · "+esc(fmtDur(r.dur))+" timed race":""}${r.cautions!=null&&r.cautions!==""?" · "+esc(r.cautions)+" cautions":""}${r.lc!=null&&r.lc!==""?" · "+esc(r.lc)+" lead changes":""}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
   <div class="body"><div class="seg" role="tablist" style="align-self:flex-start;margin-bottom:12px">${[["res","Results"],["qual","Qualifying"+((ui.modal.qrows||[]).length?" ("+ui.modal.qrows.length+")":"")]].concat(!ex&&stg(d).on?[["stg","Stages"]]:[]).map(([v,n])=>`<button role="tab" data-act="mTab" data-v="${v}" class="${tab===v?"on":""}">${n}</button>`).join("")}</div>
   <div ${tab==="res"?"":"hidden"}>${ex?"":`<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px"><b>Fastest lap</b><label class="fld">Driver<select data-fl="d" style="min-width:210px">${flOpts(d,ui.modal)}</select></label><label class="fld">Lap time<input type="text" data-fl="t" value="${esc((ui.modal.fl||{}).t||"")}" placeholder="1:23.456" style="width:120px"></label>${d.settings.fl>0?`<span class="small muted">Worth ${esc(d.settings.fl)} point${+d.settings.fl===1?"":"s"}</span>`:""}</div>`}${simBox(d,ui.modal,"race")}<div class="help" style="margin-bottom:12px"><div class="row" style="margin-bottom:8px"><b>NR2003 results file:</b><button class="btn sm pri" data-act="nrPickM">Choose file</button><input type="file" id="nrFileM" accept=".html,.htm,text/html" hidden><span class="small muted">Fills this race from the exported .html. Unknown drivers are added to the roster.</span></div><b>Or type it in:</b> paste the finishing order, one driver per line (car number or name). Optional extra columns: <code>start, laps led, status</code>.
     <textarea id="pasteBox" rows="4" style="margin:8px 0" placeholder="24&#10;48&#10;20&#10;..."></textarea><button class="btn sm" data-act="mPaste">Fill table from paste</button> <button class="btn sm" data-act="mFill">Add whole roster</button></div>
-  <div class="tw"><table><thead><tr><th></th><th>Fin</th><th>Driver</th><th>Start</th><th>Led</th><th>Laps</th><th title="Gap to the leader or the car ahead. The winner can show the race time.">Interval</th><th>Status</th>${ex?"":'<th title="Leave blank for the automatic total. Type a number to override it, for example after a provisional ruling.">Pts</th>'}<th></th></tr></thead><tbody>
-  ${rows.map((x,i)=>`<tr data-drop="row" data-key="${i}"><td class="grip" draggable="true" data-drag="row" data-key="${i}" title="Drag to reorder">⠿</td><td><input type="number" class="w-s" data-m="f" data-i="${i}" value="${x.f}"></td><td class="${x.d?"":"bad"}"><select data-m="d" data-i="${i}" style="min-width:190px">${opts(x.d)}</select></td>
+  <div class="tw"><table><thead><tr><th></th><th>Fin</th><th>Driver</th>${clsOn(d)?"<th>Class</th>":""}<th>Start</th><th>Led</th><th>Laps</th><th title="Gap to the leader or the car ahead. The winner can show the race time.">Interval</th><th>Status</th>${ex?"":'<th title="Leave blank for the automatic total. Type a number to override it, for example after a provisional ruling.">Pts</th>'}<th></th></tr></thead><tbody>
+  ${rows.map((x,i)=>`<tr data-drop="row" data-key="${i}"><td class="grip" draggable="true" data-drag="row" data-key="${i}" title="Drag to reorder">⠿</td><td><input type="number" class="w-s" data-m="f" data-i="${i}" value="${x.f}"></td><td class="${x.d?"":"bad"}"><select data-m="d" data-i="${i}" style="min-width:190px">${opts(x.d)}</select></td>${clsOn(d)?`<td data-cc="${i}" style="white-space:nowrap">${clsCellTxt(d,rows,i)}</td>`:""}
    <td><input type="number" class="w-s" data-m="s" data-i="${i}" value="${x.s===""?"":x.s}"></td><td><input type="number" class="w-s" data-m="l" data-i="${i}" value="${x.l||""}"></td><td><input type="number" class="w-s" data-m="n" data-i="${i}" value="${x.n||""}"></td>
    <td><input type="text" class="w-m" data-m="i" data-i="${i}" value="${esc(x.i||"")}" placeholder="${esc(ivlTxt({f:num(x.f),x:x.x}))}"></td>
-   <td><input type="text" class="w-m" list="stat" data-m="x" data-i="${i}" value="${esc(x.x)}"></td>${ex?"":`<td><input type="number" class="w-s ${x.p===""||x.p==null?"":"ovr"}" data-m="p" data-i="${i}" value="${x.p===""||x.p==null?"":x.p}" placeholder="${x.d&&am.has(x.d)?am.get(x.d):""}"></td>`}<td style="white-space:nowrap"><button class="btn sm" data-act="mUp" data-i="${i}" aria-label="Move up">↑</button> <button class="btn sm" data-act="mDn" data-i="${i}" aria-label="Move down">↓</button> <button class="btn sm danger" data-act="mDel" data-i="${i}">✕</button></td></tr>`).join("")||'<tr><td colspan="10" class="empty">No results yet. Paste the finishing order above or add a row.</td></tr>'}
+   <td><input type="text" class="w-m" list="stat" data-m="x" data-i="${i}" value="${esc(x.x)}"></td>${ex?"":`<td><input type="number" class="w-s ${x.p===""||x.p==null?"":"ovr"}" data-m="p" data-i="${i}" value="${x.p===""||x.p==null?"":x.p}" placeholder="${x.d&&am.has(x.d)?am.get(x.d):""}"></td>`}<td style="white-space:nowrap"><button class="btn sm" data-act="mUp" data-i="${i}" aria-label="Move up">↑</button> <button class="btn sm" data-act="mDn" data-i="${i}" aria-label="Move down">↓</button> <button class="btn sm danger" data-act="mDel" data-i="${i}">✕</button></td></tr>`).join("")||'<tr><td colspan="11" class="empty">No results yet. Paste the finishing order above or add a row.</td></tr>'}
   </tbody></table></div><datalist id="stat">${STATUSES.map(s=>`<option>${s}</option>`).join("")}</datalist></div>
   <div ${tab==="qual"?"":"hidden"}>${qualPane(d,ui.modal)}</div>${!ex&&stg(d).on?`<div ${tab==="stg"?"":"hidden"}>${stagePane(d,ui.modal)}</div>`:""}</div>
   <footer>${tab==="qual"?'<button class="btn" data-act="qAdd">+ Add row</button>':tab==="stg"?"":'<button class="btn" data-act="mAdd">+ Add row</button>'}<span class="sp"></span>${r.done?'<button class="btn danger" data-act="mClear" data-confirm="1">Clear results</button>':""}<button class="btn" data-act="gfxOpen" title="Make an image of the results or qualifying">Create graphic</button><button class="btn pri" data-act="mSave">Save results</button></footer></div>`;
@@ -3468,6 +3512,7 @@ const ACT={
   ratApply:()=>{const m=ui.modal,d=cur();let n=0;m.rows.filter(r=>r.use).forEach(r=>{const x=drvOf(d,r.id);if(!x)return;x.r=x.r||{};let any=false;Object.keys(r.sug).forEach(k=>{if(!ratOn(m,k))return;x.r[k]=ratNew(x,k,r.sug[k],m.mode);any=true});if(any)n++});touch(docId(d.series,d.year));ui.modal=null;renderModal();toast("Ratings updated for "+n+" drivers")},
   realRoster:()=>{const r=ui.real=ui.real||{},d=cur(),y=Math.round(num(r.ry||d.year));if(!(y>=1950&&y<=2100)){toast("Enter a year");return "nr"}
     const m={type:"rlook",kind:"roster",s:r.rs||(WP_SER.some(x=>x[0]===d.series)?d.series:"cup"),y,status:"run",rows:[],msg:"",title:""};ui.modal=m;renderModal();wpRun(m);return "nr"},
+  rrGrp:b=>{const m=ui.modal;m.group=b.dataset.v==="driver"?"driver":"car";m.rows=imsaGroup(m.raw,m.group);renderModal();return "nr"},
   rrAll:b=>{const m=ui.modal,v=b.dataset.v;m.rows.forEach(r=>r.use=v==="all"?true:v==="none"?false:r.pf);renderModal();return "nr"},
   rrAdd:()=>{const m=ui.modal,d=cur();let add=0,upd=0;
     const nk=t=>String(t||"").trim().toLowerCase(),sn=v=>String(v==null?"":v).trim(),inc=m.rows.filter(r=>r.use),taken=new Set();
@@ -3476,11 +3521,13 @@ const ACT={
       if(!x)x=ex.find(z=>sn(z.num)===""||!inc.some(q=>nk(q.name)===nk(z.name)&&sn(q.num)===sn(z.num)));
       return x};
     inc.slice().sort((a,b)=>(sn(b.num)!==""&&d.drivers.some(z=>nk(z.name)===nk(b.name)&&sn(z.num)===sn(b.num))?1:0)-(sn(a.num)!==""&&d.drivers.some(z=>nk(z.name)===nk(a.name)&&sn(z.num)===sn(a.num))?1:0)).forEach(r=>{let x=pick(r);if(x)upd++;else{x=mkDriver();d.drivers.push(x);add++}
-      taken.add(x.id);x.name=r.name;if(r.num)x.num=r.num;if(r.team)x.team=r.team;if(r.make)x.make=r.make;x.pf=r.pf;if(r.rookie)x.rookie=true});
-    touch(docId(d.series,d.year));ui.modal=null;renderModal();toast("Roster: "+add+" added, "+upd+" updated")},
+      taken.add(x.id);x.name=r.name;if(r.num)x.num=r.num;if(r.team)x.team=r.team;if(r.make)x.make=r.make;x.pf=r.pf;if(r.rookie)x.rookie=true;if(r.cls)x.cls=r.cls});
+    let ce="";const cl=[...new Set(inc.map(r=>r.cls).filter(Boolean))];
+    if(cl.length){d.settings=d.settings||{};const have=clsNames(d),miss=cl.filter(c=>!have.includes(c));if(miss.length||!d.settings.cls){d.settings.cls=true;d.settings.clsPts=true;d.settings.clsList=have.concat(miss).join("\n");ce=" · classes turned on ("+have.concat(miss).join(", ")+")"}}
+    touch(docId(d.series,d.year));ui.modal=null;renderModal();toast("Roster: "+add+" added, "+upd+" updated"+ce)},
   realLook:()=>{const r=ui.real||{},y=Math.round(num(r.ly));if(!(y>=1950&&y<=2100)){toast("Enter a year");return "nr"}
     const m={type:"rlook",s:r.ls||"cup",y,status:"run",rows:[],msg:"",title:""};ui.modal=m;renderModal();wpRun(m);return "nr"},
-  rlAdd:b=>{const m=ui.modal,d=cur(),out=m.rows.filter(r=>r.use).map(r=>({id:uid(),date:d.year+r.date.slice(4),name:r.name,track:r.track,type:realType2(r.track,m.s),len:trackLen(r.track),laps:r.laps||"",done:false,res:[]}));
+  rlAdd:b=>{const m=ui.modal,d=cur(),out=m.rows.filter(r=>r.use).map(r=>({id:uid(),date:d.year+r.date.slice(4),name:r.name,track:r.track,type:realType2(r.track,m.s),len:trackLen(r.track),laps:r.laps||"",dur:r.dur||"",done:false,res:[]}));
     if(b.dataset.v==="replace")d.races=out;else d.races=d.races.concat(out);
     touch(docId(d.series,d.year));ui.modal=null;renderModal();ui.view="schedule";toast(out.length+" races "+(b.dataset.v==="replace"?"set":"added")+" from Wikipedia")},
   newSeason:()=>{
@@ -3490,9 +3537,9 @@ const ACT={
       const src=docs[docId(k,prev)],nd=newDoc(k,y);
       if(src){nd.name=src.name;nd.settings=JSON.parse(JSON.stringify(src.settings));if(src.color)nd.color=src.color;
         if(cr&&src.teams)nd.teams=JSON.parse(JSON.stringify(src.teams));
-        if(cs)nd.exh=(src.exh||[]).map(r=>({id:uid(),date:"",name:r.name,kind:r.kind,track:r.track,laps:r.laps,done:false,res:[]}));
+        if(cs)nd.exh=(src.exh||[]).map(r=>({id:uid(),date:"",name:r.name,kind:r.kind,track:r.track,laps:r.laps,dur:r.dur||"",done:false,res:[]}));
         if(cr)nd.drivers=JSON.parse(JSON.stringify(src.drivers)).map(x=>{x.rookie=false;if(x.age!==""&&x.age!=null&&!isNaN(x.age))x.age=+x.age+(y-src.year);return x});
-        if(cs)nd.races=src.races.map(r=>({id:uid(),date:"",name:r.name,track:r.track,type:r.type,len:r.len,laps:r.laps,done:false,res:[]}))}
+        if(cs)nd.races=src.races.map(r=>({id:uid(),date:"",name:r.name,track:r.track,type:r.type,len:r.len,laps:r.laps,dur:r.dur||"",done:false,res:[]}))}
       docs[docId(k,y)]=nd;touch(docId(k,y));
     });
     ui.year=y;ui.view="overview";toast(y+" season created");
@@ -3630,13 +3677,22 @@ document.addEventListener("change",e=>{
   const ed=t.dataset.ed;if(!ed||!d)return;
   const id=docId(d.series,d.year),k=t.dataset.k,val=t.type==="checkbox"?t.checked:t.value;
   if(ed==="exh"){const r=(d.exh||[]).find(x=>x.id===t.dataset.id);if(r)r[k]=val}
-  else if(ed==="race"){const r=d.races.find(x=>x.id===t.dataset.id);if(r){r[k]=(k==="len"||k==="laps")&&val!==""?num(val):val;if(k==="track"&&(r.len===""||r.len==null))r.len=trackLen(val)}}
+  else if(ed==="race"){const r=d.races.find(x=>x.id===t.dataset.id);if(r){r[k]=(k==="len"||k==="laps"||k==="dur")&&val!==""?num(val):val;if(k==="track"&&(r.len===""||r.len==null))r.len=trackLen(val)}}
   else if(ed==="drv"){const x=drvOf(d,t.dataset.id);if(x){
     if(k==="age"){const a=String(val).trim()===""?"":Math.max(0,Math.min(120,Math.round(num(val))));t.value=a;x.age=a;
       Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd!==d&&dd.year===d.year)dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()){z.age=a;touch(did)}})})}
     else if(k==="nat"){const v=natNorm(val);t.value=v;Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()&&(z.nat||"")!==v){z.nat=v;ch=true}});if(ch&&dd!==d)touch(did)}});x.nat=v}
     else if(k==="hometown"){const v=String(val).replace(/\s+/g," ").trim();Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()&&(z.hometown||"")!==v){if(v)z.hometown=v;else delete z.hometown;ch=true}});if(ch&&dd!==d)touch(did)}});if(v)x.hometown=v;else delete x.hometown}
     else if(k==="retired"){const on=!!val;Object.keys(docs).forEach(did=>{const dd=docs[did];if(dd&&dd.drivers){let ch=false;dd.drivers.forEach(z=>{if(z.name.trim().toLowerCase()===x.name.trim().toLowerCase()&&!!z.retired!==on){z.retired=on;ch=true}});if(ch)touch(did)}});x.retired=on}
+    else if(k==="name"){const nv=String(val).replace(/\s+/g," ").trim(),old=String(x.name||"").trim();t.value=nv;
+      if(nv.toLowerCase()===old.toLowerCase()||!nv)x.name=nv;
+      else{x.name=nv;let src=null;Object.keys(docs).forEach(did=>{const dd=docs[did];if(!dd||!dd.drivers)return;dd.drivers.forEach(z=>{if(z!==x&&String(z.name).trim().toLowerCase()===nv.toLowerCase()){const better=!src||(dd.year===d.year&&src.year!==d.year);if(better)src={z,year:dd.year}}})});
+        let how="cleared";
+        if(src){const z=src.z;if(z.nat)x.nat=z.nat;else delete x.nat;if(z.hometown)x.hometown=z.hometown;else delete x.hometown;
+          const ag=parseInt(z.age,10);x.age=isFinite(ag)&&String(z.age).trim()!==""?Math.max(0,ag+(d.year-src.year)):"";if(z.retired)x.retired=true;else delete x.retired;how="filled in from another entry for "+nv}
+        else{delete x.nat;delete x.hometown;x.age="";delete x.retired}
+        toast("New driver: nationality, hometown and age "+how+(src?"":". Use Lookup to fill them in")+".")}
+      touch(id);setTimeout(render,0);return}
     else x[k]=val}}
   else if(ed==="rate"){const x=drvOf(d,t.dataset.id);if(x){x.r=x.r||{};const td=t.closest("td"),ia=td.querySelector('[data-e="a"]'),ib=td.querySelector('[data-e="b"]');
     if(ia.value===""&&ib.value==="")delete x.r[k];
@@ -3683,6 +3739,7 @@ function modalEdit(t,commit){
   row[k]=(k==="d"||k==="x"||k==="i")?t.value:(t.value===""?(k==="s"||k==="p"?"":0):num(t.value));
   if(k==="d"){const td=t.closest("td");if(td)td.classList.toggle("bad",!t.value);const fs=document.querySelector("[data-fl=d]");if(fs&&!m.exh)fs.innerHTML=flOpts(cur(),m)}
   if(k==="p")t.classList.toggle("ovr",t.value!=="");
+  if(k==="d"||k==="s")clsCellsRefresh();
   if(m.exh)return;
   const am=ptsFor(cur(),m.rows,true);
   m.rows.forEach((x,i)=>{const e=document.querySelector(`input[data-m="p"][data-i="${i}"]`);if(e)e.placeholder=x.d&&am.has(x.d)?am.get(x.d):""});
