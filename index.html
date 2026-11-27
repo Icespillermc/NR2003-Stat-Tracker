@@ -163,6 +163,7 @@ td.bad select{border-color:var(--bad)}
 .calg>.out{background:var(--bg);opacity:.6}
 .calg .dn{display:block;font-size:12px;color:var(--muted);margin-bottom:2px}
 .calg .today .dn{font-weight:800;color:var(--text)}
+.co-line{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px;font-size:11px}.co-line .pill{font-size:11px;padding:1px 6px}.co-add{width:92px;font-size:11px;padding:1px 2px;opacity:.75}.co-add:focus,.co-add:hover{opacity:1}
 .calev{display:block;width:100%;margin-top:2px;border:0;border-radius:4px;padding:2px 5px;font-size:11px;font-weight:600;text-align:left;cursor:pointer;background:var(--accent);color:var(--on-accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .calev.done{opacity:.45}
 .calev.next{outline:2px solid var(--text);outline-offset:1px;font-weight:800}
@@ -413,6 +414,12 @@ const photoOf=n=>PH.get(phKey(n))||"";
 async function phSave(name,v){const k=phKey(name),id=phId(name);if(v){PH.set(k,v);PHID.set(id,k)}else{PH.delete(k);PHID.delete(id)}
   try{if(db){const ref=db.doc("photos/"+id);if(v)await ref.set({k,v});else await ref.delete()}else{if(v)await lset("nr_ph_"+id,{k,v});else await ldel("nr_ph_"+id)}}
   catch(e){toast("Couldn't save the photo: "+((e&&(e.message||e.code))||e))}}
+function fixCoDup(){let n=0;Object.keys(docs).forEach(did=>{const dd=docs[did];if(!dd||!dd.drivers)return;let ch=false;
+  (dd.races||[]).concat(dd.exh||[]).forEach(r=>{if(!r.res||!r.res.some(x=>x.cg))return;
+    const nm=id=>{const x=dd.drivers.find(z=>z.id===id);return x?String(x.name||"").trim().toLowerCase():id},isL=x=>!x.cg||x.cg===x.d,lead=new Set(r.res.filter(isL).map(x=>nm(x.d))),seen=new Set();
+    const keep=r.res.filter(x=>{if(isL(x))return true;const k=nm(x.d);if(lead.has(k)||seen.has(k))return false;seen.add(k);return true});
+    if(keep.length!==r.res.length){n+=r.res.length-keep.length;r.res=keep;ch=true}});
+  if(ch)touch(did)});if(n&&typeof toast==="function")toast("Removed "+n+" duplicate co-driver entr"+(n===1?"y":"ies")+" from saved races")}
 function migratePhotos(){let any=false;Object.keys(docs).forEach(did=>{const dd=docs[did];if(!dd||!dd.drivers)return;let ch=false;dd.drivers.forEach(z=>{if(z.photo){if(!PH.has(phKey(z.name))){phSave(z.name,z.photo)}delete z.photo;ch=true}});if(ch){touch(did);any=true}});return any}
 const sidOf=(sl,id)=>sl==="main"?id:sl+"~"+id;
 const parseSid=sid=>{const i=sid.indexOf("~");return i<0?["main",sid]:[sid.slice(0,i),sid.slice(i+1)]};
@@ -478,7 +485,7 @@ function rebuild(){
   raw.forEach((data,sid)=>{const [sl,id]=parseSid(sid);if(sl===slot){docs[id]=JSON.parse(JSON.stringify(data));lastJson[id]=canon(data)}});
   const polech=[];Object.keys(docs).forEach(did=>{const st=docs[did]&&docs[did].settings;if(st&&+st.pole>0){if(!(st.qpts&&st.qpts.length))st.qpts=[+st.pole];st.pole=0;polech.push(did)}});
   if(polech.length)setTimeout(()=>polech.forEach(touch),50);
-  setTimeout(migratePhotos,0);
+  setTimeout(migratePhotos,0);setTimeout(fixCoDup,50);
 }
 function resetSeriesList(){SERIES=DEFK.map(k=>[k,DEFN[k]])}
 function seedDocs(year){resetSeriesList();SERIES.forEach(([k])=>{const id=docId(k,year);docs[id]=newDoc(k,year);touch(id)})}
@@ -828,7 +835,7 @@ function gfxStdData(d){
   if(owners){const R=ownerRows(d),lead=R.length?R[0].pts:0;
     rows=R.map((r,i)=>Object.assign({pos:r.rank,num:r.key,name:r.owner||"No team",sub:r.ds.map(o=>o.x.name).join(", "),rookie:r.ds.length>0&&r.ds.every(o=>o.x.rookie),pts:r.pts,lead:i?"-"+(lead-r.pts):""},st(r)))}
   else{const S=standings(d,mode).rows,lead=S.length?S[0].show:0;
-    rows=S.map((s,i)=>Object.assign({pos:s.rank,num:s.num,name:s.name,rookie:!!s.rookie,sub:s.team||"No team",pts:s.show,lead:i&&S[i-1].chase===s.chase?"-"+(lead-s.show):""},st(s)))}
+    rows=S.map((s,i)=>Object.assign({pos:s.rank,num:s.num,name:s.name,rookie:!!s.rookie,sub:((clsOn(d)&&(drvOf(d,s.id)||{}).cls)?drvOf(d,s.id).cls+" · ":"")+(s.team||"No team"),pts:s.show,lead:i&&S[i-1].chase===s.chase?"-"+(lead-s.show):""},st(s)))}
   const qs=!owners?(mode==="reg"?qualStatus(d,true):mode==="post"?qualStatus(d,false):null):null;
   const lbl=!owners&&hasPost?({full:"Full season",reg:"Regular season",post:PO(d).on?"Playoffs":"Chase"})[mode]:"";
   return {type:"gfx",title:owners?"Owner Standings":"Driver Standings",sub:[done+" of "+d.races.length+" races",lbl].filter(Boolean).join("   ·   "),std:rows,res:[],qual:[],series:d.series,sname:d.name,year:d.year,kind:"std",style:"dark",font:"inter",top:0,cols:"auto",owners,cut:qs&&qs.cut>0&&qs.cut<rows.length?qs.cut:0,cutLbl:qs?qs.n+" "+(qs.isCh?"make the Chase":"make the playoffs"):""};
@@ -2175,9 +2182,9 @@ function modalDlu(){
   <footer><span class="small muted">${all.length?`${rows.length} of ${all.length} drivers. `:""}This replaces the qualifying order saved for that race.</span><span class="sp"></span><button class="btn pri" data-act="dluApply" ${ds.length>1&&m.race&&rows.length?"":"disabled"}>Use as starting lineup</button></footer></div>`;
 }
 function gfxData(d,m){
-  const r=mlist(d).find(x=>x.id===m.id)||{},am=ptsFor(d,m.rows,true),dv=id=>drvOf(d,id)||{num:"",name:"",team:""};
-  const res=m.rows.filter(x=>x.d).slice().sort((a,b)=>num(a.f)-num(b.f)).map((x,i)=>{const v=dv(x.d);return {pos:i+1,s:x.s||"",num:v.num,name:v.name,team:v.team||"",laps:x.n||"",led:x.l||"",gap:(x.x&&x.x!=="Running"?x.x:(x.i||(num(x.f)===1?"Leader":""))),pts:m.exh?"":(x.p!==""&&x.p!=null?x.p:(am.get(x.d)!=null?am.get(x.d):""))}});
-  const qcf=qrCfg(d),qual=(m.qrows||[]).filter(x=>x.d).slice().sort((a,b)=>(num(a.p)||999)-(num(b.p)||999)).map((x,i)=>{const v=dv(x.d);return {pos:i+1,num:v.num,name:v.name,team:v.team||"",time:x.t||"",rd:qrOf(qcf,i+1)}});
+  const r=mlist(d).find(x=>x.id===m.id)||{},am=ptsFor(d,m.rows,true),dv=id=>drvOf(d,id)||{num:"",name:"",team:""},cOn=clsOn(d),cpm=cOn?clsPos(d,{res:m.rows.filter(x=>x.d).map(x=>({d:x.d,f:num(x.f),s:num(x.s),l:num(x.l)}))}):null;
+  const res=m.rows.filter(x=>x.d).slice().sort((a,b)=>num(a.f)-num(b.f)).map((x,i)=>{const v=dv(x.d);return {pos:i+1,s:x.s||"",num:v.num,name:v.name,co:(x.co||[]).map(id=>dv(id).name).filter(Boolean),team:v.team||"",cl:cOn?(v.cls||""):"",cp:cOn&&cpm&&cpm.get(x.d)&&num(x.f)>0&&v.cls?"P"+cpm.get(x.d).f:"",laps:x.n||"",led:x.l||"",gap:(x.x&&x.x!=="Running"?x.x:(x.i||(num(x.f)===1?"Leader":""))),pts:m.exh?"":(x.p!==""&&x.p!=null?x.p:(am.get(x.d)!=null?am.get(x.d):""))}});
+  const qcf=qrCfg(d),qc={},qual=(m.qrows||[]).filter(x=>x.d).slice().sort((a,b)=>(num(a.p)||999)-(num(b.p)||999)).map((x,i,arr)=>{const v=dv(x.d),c=cOn?(v.cls||""):"";qc[c]=(qc[c]||0)+1;return {pos:i+1,num:v.num,name:v.name,team:v.team||"",time:x.t||"",rd:qrOf(qcf,i+1),cl:c,cp:c?"P"+qc[c]:""}});
   const bits=[r.track,r.date?fmtDate(r.date):"",r.cautions!==""&&r.cautions!=null?r.cautions+" cautions":"",r.lc!==""&&r.lc!=null?r.lc+" lead changes":""].filter(Boolean);
   return {type:"gfx",title:r.name||"Race",sub:bits.join("   ·   "),res,qual,qr:qcf,series:d.series,sname:d.name,year:d.year,kind:m.tab==="qual"&&qual.length?"qual":(res.length?"res":"qual"),style:"light",font:"inter",top:0,cols:"auto"};
 }
@@ -2265,6 +2272,7 @@ function gfxDrawStd(m,cv){
   x.textAlign="left";x.fillStyle=MU;x.font=`700 14px ${F}`;x.fillText("NR2003 Tracker",pad,H-22);
   x.textAlign="right";x.font=`500 14px ${F}`;x.fillText(m.sname+" "+m.year,W-pad,H-22);
 }
+const gfxAbbr=n=>{const p=String(n||"").trim().split(/\s+/);if(p.length<2)return String(n||"");const f=p[0];if(/^[A-Z]{2,}\.?$/.test(f)||/^([A-Z]\.)+$/.test(f))return p.join(" ");return f.charAt(0).toUpperCase()+". "+p.slice(1).join(" ")};
 function gfxDraw(){
   const m=ui.modal,cv=document.getElementById("gfxC");if(!cv||!m||m.type!=="gfx")return;
   if(m.kind==="std"){gfxDrawStd(m,cv);return}
@@ -2282,7 +2290,7 @@ function gfxDraw(){
   x.globalAlpha=.8;x.font=`700 15px ${F}`;x.fillText((m.sname+"  ·  "+m.year+"  ·  "+(m.kind==="qual"?"QUALIFYING":m.kind==="std"?"STANDINGS":"RESULTS")).toUpperCase(),pad,50);x.globalAlpha=1;
   x.font=`800 44px ${F}`;x.fillText(cut(m.title,W-2*pad),pad,100);
   x.globalAlpha=.9;x.font=`500 19px ${F}`;x.fillText(cut(m.sub,W-2*pad),pad,132);x.globalAlpha=1;
-  const defs=m.kind==="std"?(two?[{h:"LEAD",k:"lead",w:100},{h:"PTS",k:"pts",w:80}]:[{h:"WINS",k:"wins",w:70},{h:"T5",k:"t5",w:56},{h:"T10",k:"t10",w:60},{h:"LEAD",k:"lead",w:110},{h:"PTS",k:"pts",w:84}]):m.kind==="qual"?[{h:"TIME",k:"time",w:150}]:two?[{h:"INTERVAL",k:"gap",w:150},{h:"PTS",k:"pts",w:60}]:[{h:"ST",k:"s",w:56},{h:"LAPS",k:"laps",w:70},{h:"LED",k:"led",w:62},{h:"INTERVAL",k:"gap",w:150},{h:"PTS",k:"pts",w:66}];
+  const defs=m.kind==="std"?(two?[{h:"LEAD",k:"lead",w:100},{h:"PTS",k:"pts",w:80}]:[{h:"WINS",k:"wins",w:70},{h:"T5",k:"t5",w:56},{h:"T10",k:"t10",w:60},{h:"LEAD",k:"lead",w:110},{h:"PTS",k:"pts",w:84}]):m.kind==="qual"?[{h:"CLASS",k:"cl",w:96},{h:"CLS POS",k:"cp",w:74},{h:"TIME",k:"time",w:150}]:two?[{h:"CLASS",k:"cl",w:96},{h:"CLS POS",k:"cp",w:74},{h:"INTERVAL",k:"gap",w:150},{h:"PTS",k:"pts",w:60}]:[{h:"CLASS",k:"cl",w:96},{h:"CLS POS",k:"cp",w:74},{h:"ST",k:"s",w:56},{h:"LAPS",k:"laps",w:70},{h:"LED",k:"led",w:62},{h:"INTERVAL",k:"gap",w:150},{h:"PTS",k:"pts",w:66}];
   const cols=defs.filter(c=>rows.some(r=>r[c.k]!==""&&r[c.k]!=null)),colW=two?(W-2*pad-40)/2:W-2*pad;
   for(let c=0;c<(two?2:1);c++){
     const x0=pad+c*(colW+40),items=colItems[c]||[];if(!items.length)continue;
@@ -2300,8 +2308,12 @@ function gfxDraw(){
       rr(x0+6,y+11,38,34,8);x.fillStyle=r.pos===1?acc:t.chip;x.fill();
       x.fillStyle=r.pos===1?onAcc:t.tx;x.font=`800 18px ${F}`;x.textAlign="center";x.fillText(r.pos,x0+25,y+34);
       x.fillStyle=t.tx;x.font=`800 22px ${F}`;x.fillText(r.num,x0+85,y+35);
-      x.textAlign="left";x.font=`700 19px ${F}`;x.fillStyle=t.tx;x.fillText(cut(r.name,nameW),x0+124,y+27);
-      x.font=`500 13px ${F}`;x.fillStyle=t.mu;x.fillText(cut(r.team||"No team",nameW),x0+124,y+45);
+      x.textAlign="left";x.fillStyle=t.tx;let nm=r.name,fs=19,two2=null;
+      if(r.co&&r.co.length){const ns=[r.name].concat(r.co).map(gfxAbbr);nm=ns.join(" / ");x.font=`700 ${fs}px ${F}`;while(fs>15&&x.measureText(nm).width>nameW){fs--;x.font=`700 ${fs}px ${F}`}
+        if(x.measureText(nm).width>nameW){const h=Math.ceil(ns.length/2);two2=[ns.slice(0,h).join(" / "),ns.slice(h).join(" / ")];fs=14}}
+      x.font=`700 ${fs}px ${F}`;
+      if(two2){x.fillText(cut(two2[0],nameW),x0+124,y+20);x.fillText(cut(two2[1],nameW),x0+124,y+35);x.font=`500 12px ${F}`;x.fillStyle=t.mu;x.fillText(cut(r.team||"No team",nameW),x0+124,y+49)}
+      else{x.fillText(cut(nm,nameW),x0+124,y+27);x.font=`500 13px ${F}`;x.fillStyle=t.mu;x.fillText(cut(r.team||"No team",nameW),x0+124,y+45)}
       x.textAlign="right";x.font=`600 17px ${F}`;x.fillStyle=t.tx;
       cols.forEach((cl,j)=>{x.fillText(cut(r[cl.k],cl.w-8),pos[j],y+34)});
     });
@@ -2770,9 +2782,9 @@ const SIM_FAIL=["Crash","Engine","Transmission","Suspension","Overheating","Brak
 const simG=()=>{let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random())};
 const simR=(x,c)=>{if(rOff(c))return 50;const v=rg(x,c);return v?v.a+(v.b-v.a)*Math.random():50};
 const simMean=(x,cs)=>cs.reduce((a,c)=>a+simR(x,c),0)/cs.length;
-function simField(d,over){
+function simField(d,over,ent){
   const sh=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
-  const all=sh(d.drivers.filter(x=>!x.retired&&!isHid(x,hiddenSet()))),n=Math.round(num(over!==undefined?over:ui.sim.field)),lim=n>0?n:Infinity,used=new Set(),out=[];
+  const all=sh(ent?ent.filter(c=>c.on!==false).map(c=>drvOf(d,c.d)).filter(Boolean):d.drivers.filter(x=>!x.retired&&!isHid(x,hiddenSet()))),n=Math.round(num(over!==undefined?over:ui.sim.field)),lim=n>0?n:Infinity,used=new Set(),out=[];
   const un=new Set(),take=x=>{const k=String(x.num==null?"":x.num).trim(),nk=String(x.name||"").trim().toLowerCase();if(k&&used.has(k))return false;if(nk&&un.has(nk))return false;if(k)used.add(k);if(nk)un.add(nk);out.push(x);return true};
   if(ui.sim.charter!==false)all.filter(x=>x.charter).forEach(take);
   all.forEach(x=>{if(out.length<lim&&!out.includes(x))take(x)});
@@ -2798,13 +2810,20 @@ const flTime=sec=>{if(!(sec>0))return "";const m=Math.floor(sec/60),x=sec-m*60;r
 function simRace(d,r,m){
   const L=Math.max(10,raceLaps(d,r)||200),dnfR=Math.max(0,num(ui.sim.dnf))/100,fl=Math.round(num(ui.sim.field)),lim=fl>0?fl:Infinity;
   let q=(m.qrows||[]).filter(z=>z.d&&drvOf(d,z.d)).sort((a,b)=>(num(a.p)||999)-(num(b.p)||999)),made=false;
-  const pool=simField(d,0);if(pool.length<2)return null;
-  if(q.length<2){q=simQual(d,r,simField(d,Math.round(num(ui.sim.qatt))||0));made=true}
+  const ent=m.entry||r.entry||null,pool=simField(d,0,ent);if(pool.length<2)return null;
+  const coMap=new Map();
+  if(ent)ent.forEach(c=>{if((c.co||[]).length)coMap.set(c.d,c.co.slice())});
+  else if(d.settings.shared){const grp=new Map(),kk=x=>String(x.num==null?"":x.num).trim()+"|"+String(x.team||"").trim().toLowerCase();
+    d.drivers.filter(x=>!x.retired&&String(x.num==null?"":x.num).trim()).forEach(x=>{const k=kk(x);if(!grp.has(k))grp.set(k,[]);grp.get(k).push(x.id)});
+    d.drivers.forEach(x=>{const co=(grp.get(kk(x))||[]).filter(id=>id!==x.id);if(co.length)coMap.set(x.id,co)})}
+  if(q.length<2){q=simQual(d,r,simField(d,Math.round(num(ui.sim.qatt))||0,ent));made=true}
   else if(q.length<Math.min(lim,pool.length)){const have=new Set(q.map(z=>z.d)),rest=pool.filter(x=>!have.has(x.id));q=q.concat(rest.map((x,i)=>({d:x.id,p:q.length+i+1,t:""})))}
   const picked=[],usedN=new Set(),chOn=ui.sim.charter!==false,addQ=z=>{const x=drvOf(d,z.d),k=String(x.num==null?"":x.num).trim();if(k&&usedN.has(k))return;if(k)usedN.add(k);picked.push(z)};
   if(chOn)q.forEach(z=>{if(drvOf(d,z.d).charter)addQ(z)});
   q.forEach(z=>{if(picked.length<lim&&!picked.includes(z))addQ(z)});
-  const pset=new Set(picked.map(z=>z.d)),field=q.filter(z=>pset.has(z.d)).map(z=>drvOf(d,z.d));
+  const pset=new Set(picked.map(z=>z.d)),inF=q.filter(z=>pset.has(z.d)),usedNm=new Set(inF.map(z=>dk(d,z.d)));
+  inF.forEach(z=>{const co=(coMap.get(z.d)||[]).filter(id=>{const k=dk(d,id);if(usedNm.has(k)||!drvOf(d,id))return false;usedNm.add(k);return true});if(co.length)coMap.set(z.d,co);else coMap.delete(z.d)});
+  const field=inF.map(z=>blendCar(d,drvOf(d,z.d),coMap.get(z.d)));
   if(field.length<2)return null;
   const start=new Map(field.map((x,i)=>[x.id,i+1])),n=field.length;
   const sc=simScores(d,r,field,"race");
@@ -2825,9 +2844,7 @@ function simRace(d,r,m){
   if(!m.exh&&sg.on){const N=sg.pts.length;stgR=Array.from({length:sg.count},(_,k)=>{const end=Math.floor(L*(k+1)/(sg.count+1));return sc.filter(z=>z.laps>=end).map(z=>({id:z.x.id,v:z.score+simG()*(num(ui.sim.variance)/50)*5})).sort((a,b)=>b.v-a.v).slice(0,N).map(z=>z.id)})}
   let flr=null;{const c=sc.filter(z=>z.laps>=L*.5),mean0=sc.reduce((a,z)=>a+z.s0,0)/sc.length;let best=null,bv=-1e9;c.forEach(z=>{const v=z.score+simG()*(num(ui.sim.variance)/50)*4;if(v>bv){bv=v;best=z}});
     if(best){const sec=trackLap(d,r).v*(1-(best.s0-mean0)/50*.012*spreadF()*ssF(r))*(clsOn(d)?100/clsPct(d,best.x.cls||""):1)*1.003;flr={d:best.x.id,t:flTime(sec)}}}
-  if(d.settings.shared){const grp=new Map(),kk=x=>String(x.num==null?"":x.num).trim()+"|"+String(x.team||"").trim().toLowerCase();
-    d.drivers.filter(x=>!x.retired&&String(x.num==null?"":x.num).trim()).forEach(x=>{const k=kk(x);if(!grp.has(k))grp.set(k,[]);grp.get(k).push(x.id)});
-    rows.forEach(r0=>{const dr=drvOf(d,r0.d);if(!dr)return;const co=(grp.get(kk(dr))||[]).filter(id=>id!==r0.d);if(co.length)r0.co=co})}
+  rows.forEach(r0=>{const co=coMap.get(r0.d);if(co&&co.length)r0.co=co.slice()});
   return {rows,q:made?q:null,stg:stgR,fl:flr};
 }
 const simBox=(d,m,what)=>{const o=ui.sim,has=what==="race"?(m.rows||[]).length:(m.qrows||[]).length;
@@ -2849,22 +2866,65 @@ const clsCellTxt=(d,rows,i)=>{const x=rows[i];if(!x||!x.d)return "";const dr=drv
 const clsCellsRefresh=()=>{const m=ui.modal,d=cur();if(!m||m.type!=="race"||!clsOn(d))return;document.querySelectorAll("td[data-cc]").forEach(e=>{e.innerHTML=clsCellTxt(d,m.rows,+e.dataset.cc)})};
 /* a car with co-drivers is stored as one result row per driver, all with the same finish and a shared cg tag */
 function carFlat(cars,src){const out=[];cars.forEach((o,i)=>{const co=((src[i]||{}).co||[]).filter(c=>c&&c!==o.d);if(co.length)o.cg=o.d;out.push(o);co.forEach(c=>out.push(Object.assign({},o,{d:c})))});return out}
+/* Entry list: the cars that attempt a race, each with its co-drivers. Saved on the race as r.entry. */
+function entryDefault(d){const sh=d.settings.shared,g=new Map(),out=[],hs=hiddenSet(),nmSeen=new Set();
+  d.drivers.filter(x=>!x.retired).slice().sort((a,b)=>num(a.num)-num(b.num)).forEach(x=>{const nk=String(x.name||"").trim().toLowerCase();if(nk&&nmSeen.has(nk))return;nmSeen.add(nk);const n=String(x.num==null?"":x.num).trim();
+    if(sh&&n){const k=n+"|"+String(x.team||"").trim().toLowerCase();if(g.has(k)){g.get(k).co.push(x.id);return}const c={d:x.id,co:[],on:!isHid(x,hs)};g.set(k,c);out.push(c)}else out.push({d:x.id,co:[],on:!isHid(x,hs)})});
+  return out}
+const enEnsure=(m,d)=>{if(!m.entry)m.entry=entryDefault(d);return m.entry};
+function blendCar(d,x,co){const ds=[x].concat((co||[]).map(id=>drvOf(d,id)).filter(Boolean));if(ds.length<2)return x;const r=Object.assign({},x.r||{});
+  RALL(d).filter(z=>z[2]==="d").forEach(([k])=>{const v=ds.map(z=>rg(z,k)).filter(Boolean);if(v.length)r[k]={a:v.reduce((t,z)=>t+z.a,0)/v.length,b:v.reduce((t,z)=>t+z.b,0)/v.length}});
+  return Object.assign({},x,{r})}
+function entryPane(d,m){
+  const E=m.entry||entryDefault(d),used=new Set();E.forEach(c=>{used.add(c.d);(c.co||[]).forEach(i=>used.add(i))});
+  const usedN=new Set([...used].map(id=>dk(d,id))),srt=[...d.drivers].sort((a,b)=>num(a.num)-num(b.num)),free=srt.filter(z=>!used.has(z.id)&&!usedN.has(dk(d,z.id))),fo=free.map(z=>`<option value="${z.id}">${esc(z.num)} · ${esc(z.name)}</option>`).join("");
+  const showCo=d.settings.shared||E.some(c=>(c.co||[]).length),on=E.filter(c=>c.on!==false),nd=on.reduce((t,c)=>t+1+(c.co||[]).length,0);
+  return `<div class="help" style="margin-bottom:10px">The entry list is the cars that attempt this race. Untick a car to leave it out, or add one from the roster. ${showCo?"A car with co-drivers is simulated from the average of its drivers' ratings.":"Turn on shared cars in Setup to give cars co-drivers."} Simulated races use this list as the field${m.entry?"":" (right now it follows your roster, and is saved with the race once you change it)"}.</div>
+  <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px"><span class="small muted">${on.length} car${on.length===1?"":"s"}${showCo?" · "+nd+" drivers":""}</span><span class="sp"></span>
+    <select data-en="add" aria-label="Add a car"><option value="">+ Add a car…</option>${fo}</select>
+    <button class="btn sm" data-act="enAll" data-v="all">All in</button><button class="btn sm" data-act="enAll" data-v="none">All out</button>
+    <button class="btn sm" data-act="enReset" ${m.entry?"data-confirm=\"1\"":""}>Reset from roster</button>
+    <button class="btn sm pri" data-act="enFill" ${(m.rows||[]).length?"data-confirm=\"1\"":""} title="Replaces the rows on the Results tab with these cars, ready for you to enter finishes">Use for results rows</button></div>
+  <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center"><b class="small">Presets</b>
+    <select data-en="pload" aria-label="Load a preset"><option value="">Load a preset…</option>${(d.entryPresets||[]).map(q=>`<option value="${q.id}">${esc(q.name)} (${q.cars.filter(c=>c.on!==false).length} cars)</option>`).join("")}</select>
+    <input type="text" id="enPName" placeholder="Preset name" style="width:170px" aria-label="Preset name"><button class="btn sm" data-act="enPSave" title="Saves this entry list. Using an existing name replaces that preset.">Save as preset</button>
+    ${(d.entryPresets||[]).length?`<select data-en="pdel" aria-label="Delete a preset"><option value="">Delete a preset…</option>${d.entryPresets.map(q=>`<option value="${q.id}">${esc(q.name)}</option>`).join("")}</select>`:""}</div>
+  <div class="tw"><table><thead><tr><th>In</th><th class="n">#</th><th>Driver</th><th>Team</th>${clsOn(d)?"<th>Class</th>":""}${showCo?"<th>Co-drivers</th>":""}<th></th></tr></thead><tbody>
+  ${E.map((c,i)=>{const dr=drvOf(d,c.d)||{};return `<tr class="${c.on===false?"dim":""}"><td><input type="checkbox" class="chk" data-en="on" data-i="${i}" ${c.on!==false?"checked":""} aria-label="In the race"></td><td class="n"><span class="car">${esc(dr.num)}</span></td>
+    <td><select data-en="d" data-i="${i}" style="min-width:190px"><option value="${c.d}" selected>${esc(dr.num)} · ${esc(dr.name||"?")}</option>${fo}</select></td><td>${esc(dr.team||"")}</td>${clsOn(d)?`<td>${esc(dr.cls||"")}</td>`:""}
+    ${showCo?`<td>${(c.co||[]).map((id,j)=>`<span class="pill">${esc((drvOf(d,id)||{}).name||"?")} <a href="#" data-act="enCoDel" data-i="${i}" data-j="${j}" aria-label="Remove co-driver">✕</a></span>`).join(" ")} <select class="co-add" data-en="co" data-i="${i}" aria-label="Add co-driver"><option value="">+ co-driver</option>${fo}</select></td>`:""}
+    <td><button class="btn sm danger" data-act="enDel" data-i="${i}" aria-label="Remove car">✕</button></td></tr>`}).join("")||`<tr><td colspan="7" class="empty">No cars yet.</td></tr>`}
+  </tbody></table></div>`;
+}
+function entryEdit(t){const m=ui.modal,d=cur();
+  if(t.dataset.en==="pload"||t.dataset.en==="pdel"){const q=(d.entryPresets||[]).find(z=>z.id===t.value);if(!q){setTimeout(renderModal,0);return}
+    if(t.dataset.en==="pdel"){d.entryPresets=d.entryPresets.filter(z=>z.id!==q.id);touch(docId(d.series,d.year));toast("Preset \""+q.name+"\" deleted");setTimeout(renderModal,0);return}
+    const by=n=>d.drivers.find(x=>x.name.trim().toLowerCase()===String(n||"").trim().toLowerCase()),res=(id,n)=>drvOf(d,id)||by(n),used=new Set(),cars=[];let miss=0;
+    q.cars.forEach(c=>{const l=res(c.d,c.dn);if(!l||used.has(l.id)){miss++;return}used.add(l.id);const co=[];(c.co||[]).forEach((id,j)=>{const z=res(id,(c.con||[])[j]);if(z&&!used.has(z.id)){used.add(z.id);co.push(z.id)}else miss++});cars.push({d:l.id,co,on:c.on!==false})});
+    m.entry=cars;toast("Loaded \""+q.name+"\""+(miss?" ("+miss+" driver"+(miss===1?"":"s")+" not on this roster were skipped)":""));setTimeout(renderModal,0);return}
+  enEnsure(m,d);const k=t.dataset.en,c=m.entry[+t.dataset.i];
+  if(k==="add"){if(t.value)m.entry.push({d:t.value,co:[],on:true})}
+  else if(c){if(k==="on")c.on=t.checked;else if(k==="d"&&t.value){c.d=t.value;c.co=(c.co||[]).filter(x=>x!==t.value)}else if(k==="co"&&t.value)c.co=(c.co||[]).concat(t.value)}
+  setTimeout(renderModal,0)}
+/* a driver can only be in one car: drop co-drivers who are also a lead, or already in an earlier car */
+const dk=(d,id)=>{const x=drvOf(d,id);return x?String(x.name||"").trim().toLowerCase()||id:id};
+function coClean(rows){const d=cur(),lead=new Set(rows.map(x=>x.d).filter(Boolean).map(id=>dk(d,id))),seen=new Set();rows.forEach(x=>{if(!x.co)return;x.co=x.co.filter(id=>{const k=id&&drvOf(d,id)?dk(d,id):"";if(!k||lead.has(k)||seen.has(k))return false;seen.add(k);return true})})}
 function modalRace(){
-  const d=cur(),r=mlist(d).find(x=>x.id===ui.modal.id),ex=!!ui.modal.exh;if(!r)return "";
-  const rows=ui.modal.rows,am=ptsFor(d,rows,true),tab=ui.modal.tab||"res",coOn=!ex&&(d.settings.shared||rows.some(x=>x.co&&x.co.length)),coUsed=new Set();rows.forEach(x=>{if(x.d)coUsed.add(x.d);(x.co||[]).forEach(c=>coUsed.add(c))});
-  const opts=sel=>`<option value="">— choose —</option>`+[...d.drivers].sort((a,b)=>num(a.num)-num(b.num)).map(x=>`<option value="${x.id}" ${x.id===sel?"selected":""}>${esc(x.num)} · ${esc(x.name)}</option>`).join("");
+  const d=cur(),r=mlist(d).find(x=>x.id===ui.modal.id),ex=!!ui.modal.exh;if(!r)return "";coClean(ui.modal.rows);
+  const rows=ui.modal.rows,am=ptsFor(d,rows,true),tab=ui.modal.tab||"res",coOn=!ex&&(d.settings.shared||rows.some(x=>x.co&&x.co.length)),coUsed=new Set();rows.forEach(x=>{if(x.d)coUsed.add(dk(d,x.d));(x.co||[]).forEach(c=>coUsed.add(dk(d,c)))});
+  const opts=sel=>`<option value="">— choose —</option>`+[...d.drivers].filter(x=>x.id===sel||!coUsed.has(dk(d,x.id))).sort((a,b)=>num(a.num)-num(b.num)).map(x=>`<option value="${x.id}" ${x.id===sel?"selected":""}>${esc(x.num)} · ${esc(x.name)}</option>`).join("");
   return `<div class="dlg" role="dialog" aria-label="Race results" data-s="${ui.series}"><header><h3>${esc(r.name||"Race")}</h3>${ex?`<span class="pill">${esc(r.kind||"Exhibition")} · no points</span>`:""}<span class="muted">${esc(r.track)} ${r.date?"· "+esc(fmtDate(r.date)):""}${r.dur>0?" · "+esc(fmtDur(r.dur))+" timed race":""}${r.cautions!=null&&r.cautions!==""?" · "+esc(r.cautions)+" cautions":""}${r.lc!=null&&r.lc!==""?" · "+esc(r.lc)+" lead changes":""}</span><span class="sp"></span><button class="btn sm" data-act="close">Close</button></header>
-  <div class="body"><div class="seg" role="tablist" style="align-self:flex-start;margin-bottom:12px">${[["res","Results"],["qual","Qualifying"+((ui.modal.qrows||[]).length?" ("+ui.modal.qrows.length+")":"")]].concat(!ex&&stg(d).on?[["stg","Stages"]]:[]).map(([v,n])=>`<button role="tab" data-act="mTab" data-v="${v}" class="${tab===v?"on":""}">${n}</button>`).join("")}</div>
+  <div class="body"><div class="seg" role="tablist" style="align-self:flex-start;margin-bottom:12px">${[["res","Results"],["qual","Qualifying"+((ui.modal.qrows||[]).length?" ("+ui.modal.qrows.length+")":"")]].concat(!ex&&stg(d).on?[["stg","Stages"]]:[],!ex?[["entry","Entry list"+(ui.modal.entry?" ("+ui.modal.entry.filter(c=>c.on!==false).length+")":"")]]:[]).map(([v,n])=>`<button role="tab" data-act="mTab" data-v="${v}" class="${tab===v?"on":""}">${n}</button>`).join("")}</div>
   <div ${tab==="res"?"":"hidden"}>${ex?"":`<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px"><b>Fastest lap</b><label class="fld">Driver<select data-fl="d" style="min-width:210px">${flOpts(d,ui.modal)}</select></label><label class="fld">Lap time<input type="text" data-fl="t" value="${esc((ui.modal.fl||{}).t||"")}" placeholder="1:23.456" style="width:120px"></label>${d.settings.fl>0?`<span class="small muted">Worth ${esc(d.settings.fl)} point${+d.settings.fl===1?"":"s"}</span>`:""}</div>`}${simBox(d,ui.modal,"race")}<div class="help" style="margin-bottom:12px"><div class="row" style="margin-bottom:8px"><b>NR2003 results file:</b><button class="btn sm pri" data-act="nrPickM">Choose file</button><input type="file" id="nrFileM" accept=".html,.htm,text/html" hidden><span class="small muted">Fills this race from the exported .html. Unknown drivers are added to the roster.</span></div><b>Or type it in:</b> paste the finishing order, one driver per line (car number or name). Optional extra columns: <code>start, laps led, status</code>.
     <textarea id="pasteBox" rows="4" style="margin:8px 0" placeholder="24&#10;48&#10;20&#10;..."></textarea><button class="btn sm" data-act="mPaste">Fill table from paste</button> <button class="btn sm" data-act="mFill">Add whole roster</button></div>
-  <div class="tw"><table><thead><tr><th></th><th>Fin</th><th>Driver</th>${coOn?"<th>Co-drivers</th>":""}${clsOn(d)?"<th>Class</th>":""}<th>Start</th><th>Led</th><th>Laps</th><th title="Gap to the leader or the car ahead. The winner can show the race time.">Interval</th><th>Status</th>${ex?"":'<th title="Leave blank for the automatic total. Type a number to override it, for example after a provisional ruling.">Pts</th>'}<th></th></tr></thead><tbody>
-  ${rows.map((x,i)=>`<tr data-drop="row" data-key="${i}"><td class="grip" draggable="true" data-drag="row" data-key="${i}" title="Drag to reorder">⠿</td><td><input type="number" class="w-s" data-m="f" data-i="${i}" value="${x.f}"></td><td class="${x.d?"":"bad"}"><select data-m="d" data-i="${i}" style="min-width:190px">${opts(x.d)}</select></td>${coOn?`<td style="min-width:170px">${(x.co||[]).map((id,j)=>`<span class="pill">${esc((drvOf(d,id)||{}).name||"?")} <a href="#" data-act="coDel" data-i="${i}" data-j="${j}" aria-label="Remove co-driver">✕</a></span>`).join(" ")} <select data-m="co" data-i="${i}" aria-label="Add co-driver"><option value="">+ co-driver</option>${[...d.drivers].filter(z=>!coUsed.has(z.id)).sort((a,b)=>num(a.num)-num(b.num)).map(z=>`<option value="${z.id}">${esc(z.num)} · ${esc(z.name)}</option>`).join("")}</select></td>`:""}${clsOn(d)?`<td data-cc="${i}" style="white-space:nowrap">${clsCellTxt(d,rows,i)}</td>`:""}
+  <div class="tw"><table><thead><tr><th></th><th>Fin</th><th>Driver</th>${clsOn(d)?"<th>Class</th>":""}<th>Start</th><th>Led</th><th>Laps</th><th title="Gap to the leader or the car ahead. The winner can show the race time.">Interval</th><th>Status</th>${ex?"":'<th title="Leave blank for the automatic total. Type a number to override it, for example after a provisional ruling.">Pts</th>'}<th></th></tr></thead><tbody>
+  ${rows.map((x,i)=>`<tr data-drop="row" data-key="${i}"><td class="grip" draggable="true" data-drag="row" data-key="${i}" title="Drag to reorder">⠿</td><td><input type="number" class="w-s" data-m="f" data-i="${i}" value="${x.f}"></td><td class="${x.d?"":"bad"}"><select data-m="d" data-i="${i}" style="min-width:190px">${opts(x.d)}</select>${coOn?`<div class="co-line">${(x.co||[]).map((id,j)=>`<span class="pill">${esc((drvOf(d,id)||{}).name||"?")} <a href="#" data-act="coDel" data-i="${i}" data-j="${j}" aria-label="Remove co-driver">✕</a></span>`).join("")}<select class="co-add" data-m="co" data-i="${i}" aria-label="Add co-driver" title="Add a co-driver to this car"><option value="">+ co-driver</option>${[...d.drivers].filter(z=>!coUsed.has(dk(d,z.id))).sort((a,b)=>num(a.num)-num(b.num)).map(z=>`<option value="${z.id}">${esc(z.num)} · ${esc(z.name)}</option>`).join("")}</select></div>`:""}</td>${clsOn(d)?`<td data-cc="${i}" style="white-space:nowrap">${clsCellTxt(d,rows,i)}</td>`:""}
    <td><input type="number" class="w-s" data-m="s" data-i="${i}" value="${x.s===""?"":x.s}"></td><td><input type="number" class="w-s" data-m="l" data-i="${i}" value="${x.l||""}"></td><td><input type="number" class="w-s" data-m="n" data-i="${i}" value="${x.n||""}"></td>
    <td><input type="text" class="w-m" data-m="i" data-i="${i}" value="${esc(x.i||"")}" placeholder="${esc(ivlTxt({f:num(x.f),x:x.x}))}"></td>
-   <td><input type="text" class="w-m" list="stat" data-m="x" data-i="${i}" value="${esc(x.x)}"></td>${ex?"":`<td><input type="number" class="w-s ${x.p===""||x.p==null?"":"ovr"}" data-m="p" data-i="${i}" value="${x.p===""||x.p==null?"":x.p}" placeholder="${x.d&&am.has(x.d)?am.get(x.d):""}"></td>`}<td style="white-space:nowrap"><button class="btn sm" data-act="mUp" data-i="${i}" aria-label="Move up">↑</button> <button class="btn sm" data-act="mDn" data-i="${i}" aria-label="Move down">↓</button> <button class="btn sm danger" data-act="mDel" data-i="${i}">✕</button></td></tr>`).join("")||'<tr><td colspan="12" class="empty">No results yet. Paste the finishing order above or add a row.</td></tr>'}
+   <td><input type="text" class="w-m" list="stat" data-m="x" data-i="${i}" value="${esc(x.x)}"></td>${ex?"":`<td><input type="number" class="w-s ${x.p===""||x.p==null?"":"ovr"}" data-m="p" data-i="${i}" value="${x.p===""||x.p==null?"":x.p}" placeholder="${x.d&&am.has(x.d)?am.get(x.d):""}"></td>`}<td style="white-space:nowrap"><button class="btn sm" data-act="mUp" data-i="${i}" aria-label="Move up">↑</button> <button class="btn sm" data-act="mDn" data-i="${i}" aria-label="Move down">↓</button> <button class="btn sm danger" data-act="mDel" data-i="${i}">✕</button></td></tr>`).join("")||'<tr><td colspan="11" class="empty">No results yet. Paste the finishing order above or add a row.</td></tr>'}
   </tbody></table></div><datalist id="stat">${STATUSES.map(s=>`<option>${s}</option>`).join("")}</datalist></div>
-  <div ${tab==="qual"?"":"hidden"}>${qualPane(d,ui.modal)}</div>${!ex&&stg(d).on?`<div ${tab==="stg"?"":"hidden"}>${stagePane(d,ui.modal)}</div>`:""}</div>
-  <footer>${tab==="qual"?'<button class="btn" data-act="qAdd">+ Add row</button>':tab==="stg"?"":'<button class="btn" data-act="mAdd">+ Add row</button>'}<span class="sp"></span>${r.done?'<button class="btn danger" data-act="mClear" data-confirm="1">Clear results</button>':""}<button class="btn" data-act="gfxOpen" title="Make an image of the results or qualifying">Create graphic</button><button class="btn pri" data-act="mSave">Save results</button></footer></div>`;
+  <div ${tab==="qual"?"":"hidden"}>${qualPane(d,ui.modal)}</div>${!ex?`<div ${tab==="entry"?"":"hidden"}>${entryPane(d,ui.modal)}</div>`:""}${!ex&&stg(d).on?`<div ${tab==="stg"?"":"hidden"}>${stagePane(d,ui.modal)}</div>`:""}</div>
+  <footer>${tab==="qual"?'<button class="btn" data-act="qAdd">+ Add row</button>':tab==="stg"||tab==="entry"?"":'<button class="btn" data-act="mAdd">+ Add row</button>'}<span class="sp"></span>${r.done?'<button class="btn danger" data-act="mClear" data-confirm="1">Clear results</button>':""}<button class="btn" data-act="gfxOpen" title="Make an image of the results or qualifying">Create graphic</button><button class="btn pri" data-act="mSave">Save results</button></footer></div>`;
 }
 const ivlTxt=x=>{if(x.i!=null&&String(x.i).trim()!=="")return String(x.i);if(x.f===1)return "Leader";return x.x&&x.x!=="Running"?"DNF":""};
 const logSeg=()=>`<div class="seg" role="group" aria-label="Race log filter"><button data-act="logFilter" data-v="all" class="${ui.logWins?"":"on"}">All races</button><button data-act="logFilter" data-v="wins" class="${ui.logWins?"on":""}">Wins only</button><button data-act="logCrown" class="${ui.logCrown?"on":""}" title="Only crown jewel races">◆ Crown jewels</button></div>`;
@@ -2908,7 +2968,7 @@ function openRace(id,exh){
   const qrows=(r.qual||[]).slice().sort((a,b)=>a.p-b.p).map(x=>({d:x.d,p:x.p,t:x.t||""}));
   const sgx=stg(d),srows=(r.stg||[]).map(l=>(l||[]).slice());
   if(!exh&&sgx.on)while(srows.length<sgx.count)srows.push([]);
-  ui.modal={type:"race",id,rows,qrows,srows,tab:"res",exh:!!exh,fl:r.fl?{d:r.fl.d||"",t:r.fl.t||""}:{d:"",t:""}};renderModal();
+  ui.modal={type:"race",id,rows,qrows,srows,tab:"res",exh:!!exh,entry:r.entry?r.entry.map(c=>({d:c.d,co:(c.co||[]).slice(),on:c.on!==false})):null,fl:r.fl?{d:r.fl.d||"",t:r.fl.t||""}:{d:"",t:""}};renderModal();
 }
 
 /* ---------- helpers: import / export ---------- */
@@ -3453,6 +3513,15 @@ const ACT={
     L.push({k:"x"+Date.now().toString(36)+L.length,name:nm,g:g==="p"||g==="v"?g:"d"});ui.rfmtOpen=true;touch(docId(d.series,d.year))},
   rtDel:b=>{const d=cur(),k=b.dataset.k;d.settings.rateCustom=(d.settings.rateCustom||[]).filter(c=>c.k!==k);d.drivers.forEach(x=>{if(x.r)delete x.r[k]});if(d.settings.rateOff)delete d.settings.rateOff[k];if(d.settings.rateLbl)delete d.settings.rateLbl[k];ui.rfmtOpen=true;touch(docId(d.series,d.year))},
   lkGo:()=>{const m=ui.modal,R={homes:homeRun,photos:photoRun,nats:natRun,ages:ageRun,tnats:teamNatRun}[m&&m.type];if(!R)return "nr";m.rows=[];m.miss=[];m.errs=[];m.status="running";m.done=0;m.total=0;renderModal();R(m);return "nr"},
+  enPSave:()=>{const m=ui.modal,d=cur(),el=document.getElementById("enPName"),nm=String(el&&el.value||"").trim();if(!nm){toast("Type a name for the preset");return "nr"}
+    const E=(m.entry||entryDefault(d)),nmOf=id=>(drvOf(d,id)||{}).name||"",q={id:"ep"+Date.now().toString(36),name:nm,cars:E.map(c=>({d:c.d,dn:nmOf(c.d),co:(c.co||[]).slice(),con:(c.co||[]).map(nmOf),on:c.on!==false}))};
+    d.entryPresets=(d.entryPresets||[]).filter(z=>z.name.toLowerCase()!==nm.toLowerCase()).concat(q);touch(docId(d.series,d.year));toast("Preset \""+nm+"\" saved");renderModal();return "nr"},
+  enDel:b=>{const m=ui.modal,d=cur();enEnsure(m,d);m.entry.splice(+b.dataset.i,1);renderModal();return "nr"},
+  enCoDel:b=>{const m=ui.modal,d=cur();enEnsure(m,d);const c=m.entry[+b.dataset.i];if(c)c.co.splice(+b.dataset.j,1);renderModal();return "nr"},
+  enReset:()=>{const m=ui.modal;m.entry=null;renderModal();return "nr"},
+  enAll:b=>{const m=ui.modal,d=cur();enEnsure(m,d).forEach(c=>{c.on=b.dataset.v==="all"});renderModal();return "nr"},
+  enFill:()=>{const m=ui.modal,d=cur(),E=(m.entry||entryDefault(d)).filter(c=>c.on!==false&&drvOf(d,c.d));if(!E.length){toast("No cars are ticked in the entry list");return "nr"}
+    m.rows=E.map((c,i)=>({d:c.d,f:i+1,s:i+1,l:0,n:0,x:"Running",i:"",p:"",co:(c.co||[]).slice()}));m.tab="res";renderModal();toast(E.length+" cars added to the results rows");return "nr"},
   coDel:b=>{const m=ui.modal,r=m&&m.rows&&m.rows[+b.dataset.i];if(r&&r.co)r.co.splice(+b.dataset.j,1);renderModal();return "nr"},
   rateGroup:b=>{ui.rateGroup=b.dataset.v},
   teamNatLookup:()=>{const m={type:"tnats",over:true,rows:[],miss:[],errs:[],status:"setup",done:0,total:0};ui.modal=m;renderModal();return "nr"},
@@ -3498,7 +3567,7 @@ const ACT={
   qDn:b=>{moveQ(+b.dataset.i,+b.dataset.i+1);return "nr"},
   qAdd:()=>{const m=ui.modal;m.qrows.push({d:"",p:m.qrows.length+1,t:""});renderModal();return "nr"},
   qDel:b=>{ui.modal.qrows.splice(+b.dataset.i,1);renderModal();return "nr"},
-  simQual:()=>{const d=cur(),m=ui.modal,r=mlist(d).find(x=>x.id===m.id);if(!r)return "nr";const f=simField(d,Math.round(num(ui.sim.qatt))||0);if(f.length<2){toast("Add at least 2 drivers who aren't retired first");return "nr"}m.qrows=simQual(d,r,f);renderModal();toast("Qualifying simulated. Press Save results to keep it.");return "nr"},
+  simQual:()=>{const d=cur(),m=ui.modal,r=mlist(d).find(x=>x.id===m.id);if(!r)return "nr";const f=simField(d,Math.round(num(ui.sim.qatt))||0,m.entry||r.entry||null);if(f.length<2){toast("Add at least 2 drivers who aren't retired first");return "nr"}m.qrows=simQual(d,r,f);renderModal();toast("Qualifying simulated. Press Save results to keep it.");return "nr"},
   simRace:()=>{const d=cur(),m=ui.modal,r=mlist(d).find(x=>x.id===m.id);if(!r)return "nr";const res=simRace(d,r,m);if(!res){toast("Add at least 2 drivers who aren't retired first");return "nr"}m.rows=res.rows;if(res.q)m.qrows=res.q;if(res.stg)m.srows=res.stg;if(res.fl)m.fl=res.fl;renderModal();toast("Race simulated"+(res.q?" with qualifying":"")+(res.stg?(res.q?" and":" with")+" stages":"")+". Press Save results to keep it.");return "nr"},
   qClear:()=>{ui.modal.qrows=[];renderModal();return "nr"},
   qFromGrid:()=>{const m=ui.modal,old=new Map((m.qrows||[]).map(x=>[x.d,x.t]));
@@ -3514,7 +3583,8 @@ const ACT={
     const d=cur(),r=mlist(d).find(x=>x.id===ui.modal.id);
     const rows=ui.modal.rows.filter(x=>x.d);
     if(rows.length<ui.modal.rows.length){toast("Pick a driver for every row, or remove the empty rows.");return "nr"}
-    const seen=new Set();for(const x of rows){for(const id of [x.d].concat(x.co||[])){if(seen.has(id)){toast("A driver appears twice: "+(drvOf(d,id)||{}).name);return "nr"}seen.add(id)}}
+    const seen=new Set();for(const x of rows){for(const id of [x.d].concat(x.co||[])){const k=dk(d,id);if(seen.has(k)){toast("A driver appears twice: "+(drvOf(d,id)||{}).name);return "nr"}seen.add(k)}}
+    if(ui.modal.entry){const sn=new Set();for(const c of ui.modal.entry)for(const id of [c.d].concat(c.co||[])){const k=dk(d,id);if(sn.has(k)){toast("A driver is in the entry list twice: "+(drvOf(d,id)||{}).name);return "nr"}sn.add(k)}}
     const sgd=stg(d);let newStg=null;
     if(sgd.on&&!ui.modal.exh){
       newStg=(ui.modal.srows||[]).map(l=>l.slice());
@@ -3528,6 +3598,7 @@ const ACT={
     const qr=(ui.modal.qrows||[]).filter(x=>x.d);
     r.qual=qr.map((x,i)=>({x,i})).sort((a,b)=>((num(a.x.p)||999)-(num(b.x.p)||999))||a.i-b.i).map(({x},i)=>({d:x.d,p:i+1,t:(x.t||"").trim()}));
     if(!ui.modal.exh){const f=ui.modal.fl||{};if(f.d)r.fl={d:f.d,t:String(f.t||"").trim()};else delete r.fl}
+    if(ui.modal.entry&&!ui.modal.exh)r.entry=ui.modal.entry.map(c=>({d:c.d,co:(c.co||[]).slice(),on:c.on!==false}));
     r.done=r.res.length>0;touch(docId(d.series,d.year));ui.modal=null;renderModal();toast("Results saved");
   },
   impRoster:()=>{
@@ -3727,6 +3798,7 @@ document.addEventListener("change",e=>{
   if(t.dataset.sim){const k=t.dataset.sim;ui.sim[k]=t.value===""?"":Math.max(0,num(t.value));return}
   if(t.dataset.q&&ui.modal&&ui.modal.qrows){const r=ui.modal.qrows[+t.dataset.i],k=t.dataset.q;if(r)r[k]=k==="p"?(t.value===""?"":num(t.value)):t.value;if(k==="d"){const td=t.closest("td");if(td)td.classList.toggle("bad",!t.value)}return}
   if(t.dataset.m){modalEdit(t,true);return}
+  if(t.dataset.en&&ui.modal&&ui.modal.type==="race"){entryEdit(t);return}
   if(t.dataset.lkf&&ui.modal&&ui.modal.type&&ui.modal.status!=="running"){const f=ui.modal.flt=ui.modal.flt||{series:"all",st:"all",have:"all"};f[t.dataset.lkf]=t.value;setTimeout(renderModal,0);return}
   const ed=t.dataset.ed;if(!ed||!d)return;
   const id=docId(d.series,d.year),k=t.dataset.k,val=t.type==="checkbox"?t.checked:t.value;
